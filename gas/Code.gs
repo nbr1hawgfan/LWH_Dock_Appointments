@@ -16,6 +16,9 @@
 const SB_URL = 'https://tjivcqxnkftujceumdtx.supabase.co';
 const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqaXZjcXhua2Z0dWpjZXVtZHR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4OTE5NDMsImV4cCI6MjEwMDQ2Nzk0M30.GzDc-_u92jvAHq7eG1X-1cet5Av9qF3ZDEVJMRKEP0E';
 const FROM_NAME = 'Logistics Warehouse Dock Scheduling';
+// Optional: send as this address instead of the script owner's. It must be set up as a "Send mail as" alias
+// in the owner's Gmail (Settings > Accounts). Leave blank to send from the owner's address.
+const FROM_ADDRESS = '';
 // Shared Google Calendar that mirrors every appointment (used by the CALENDAR project).
 const CAL_ID = 'c_9d6e701ea3c5be07a1e615b0974baf1d13e78f3c40ff22d99bf3b51a1525468c@group.calendar.google.com';
 const SITE_ADDRESS = '8501 State Hwy 45, Fort Smith, AR 72916';
@@ -69,6 +72,8 @@ function processOutbox() {
         const opts = { name: FROM_NAME, htmlBody: m.html };
         if (replyTo && it.kind.indexOf('team_') !== 0 && it.kind !== 'daily') opts.replyTo = replyTo;
         if (m.ics) opts.attachments = [Utilities.newBlob(m.ics, 'text/calendar', 'LWH-' + it.payload.conf_no + '.ics')];
+        if (m.attach) opts.attachments = (opts.attachments || []).concat(m.attach);
+        if (FROM_ADDRESS) opts.from = FROM_ADDRESS;
         GmailApp.sendEmail(it.to, m.subject, m.text, opts);
         results.push({ id: it.id, ok: true });
       } catch (e) {
@@ -184,6 +189,33 @@ function ics_(p, cancel) {
     'STATUS:' + (cancel ? 'CANCELLED' : 'CONFIRMED'), 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
 }
 
+// ---------------------------------------------------------------- WMS load list (5 AM + on demand)
+function wmsEmail_(p) {
+  var items = p.items || [];
+  var ins = items.filter(function (a) { return a.direction === 'IN'; }), outs = items.filter(function (a) { return a.direction === 'OUT'; });
+  var th = function (t) { return '<td style="padding:8px;background:' + DARK + ';color:#FFFFFF;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;">' + t + '</td>'; };
+  var td = function (v, b) { return '<td style="padding:8px;border-bottom:1px solid #E2E2E2;font-family:Arial,Helvetica,sans-serif;font-size:15px;' + (b ? 'font-weight:bold;' : '') + '">' + esc_(v) + '</td>'; };
+  var table = function (title, list, color) {
+    return '<div style="font-family:Arial,Helvetica,sans-serif;font-size:17px;font-weight:bold;margin:18px 0 6px;color:' + color + ';">' + title + ' (' + list.length + ')</div>' +
+      (list.length ? '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #E2E2E2;"><tr>' + th('Time') + th('PO / BOL') + th('Carrier') + th('Trailer') + th('Conf #') + '</tr>' +
+        list.map(function (a) { return '<tr>' + td(fmtT_(a.local_time), true) + td(a.ref_no, true) + td(a.carrier_name + (a.scac ? ' (' + a.scac + ')' : '')) + td(a.trailer_type + (a.trailer_no ? ' #' + a.trailer_no : '')) + td(a.conf_no) + '</tr>'; }).join('') + '</table>'
+        : '<p style="margin:0;color:#767676;font-size:15px;">None booked.</p>');
+  };
+  var csv = [['Date', 'Time', 'Direction', 'PO/BOL', 'Carrier', 'SCAC', 'Trailer type', 'Trailer #', 'Confirmation', 'Status', 'Notes']].concat(items.map(function (a) {
+    return [p.date, fmtT_(a.local_time), dirName_(a.direction), a.ref_no, a.carrier_name, a.scac, a.trailer_type, a.trailer_no, a.conf_no, a.status, a.notes];
+  })).map(function (r) { return r.map(function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }).join(','); }).join('\r\n');
+  var text = 'Loads to build - ' + p.pretty_date + '\n\nINBOUND (' + ins.length + ')\n' + ins.map(function (a) { return fmtT_(a.local_time) + '  ' + a.ref_no + '  ' + a.carrier_name; }).join('\n') +
+    '\n\nOUTBOUND (' + outs.length + ')\n' + outs.map(function (a) { return fmtT_(a.local_time) + '  ' + a.ref_no + '  ' + a.carrier_name; }).join('\n');
+  return {
+    subject: '[WMS] Loads to build - ' + p.pretty_date + ': ' + ins.length + ' inbound, ' + outs.length + ' outbound',
+    html: shell_('Loads to build in WMS', NAVY, '<p style="margin:0 0 4px;"><b>' + esc_(p.pretty_date) + '</b> &middot; ' + ins.length + ' inbound &middot; ' + outs.length + ' outbound</p>' +
+      '<p style="margin:0;font-size:14px;color:#4A4A4A;">Appointment times, carriers and the PO/BOL numbers carriers entered. A spreadsheet copy is attached.' + (p.requested_by ? ' Sent by ' + esc_(p.requested_by) + '.' : '') + '</p>' +
+      table('Inbound', ins, BLUE) + table('Outbound', outs, AMBER) + button_('Open dock board', baseUrl_(p) + '?view=board', DARK)),
+    text: text,
+    attach: [Utilities.newBlob('\ufeff' + csv, 'text/csv', 'LWH-ArcBest-loads-' + p.date + '.csv')],
+  };
+}
+
 // ---------------------------------------------------------------- templates
 function build_(kind, p) {
   var color = p.direction === 'OUT' ? AMBER : BLUE;
@@ -192,7 +224,7 @@ function build_(kind, p) {
     '<img src="' + esc_(baseUrl_(p) + 'assets/img/entrance.jpg?v=3') + '" width="550" alt="Logistics Warehouse - ArcBest dock doors" style="display:block;width:100%;max-width:550px;height:auto;border:0;"></td></tr>' +
     '<tr><td style="background:' + NAVY + ';padding:7px 12px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:#FFFFFF;">Logistics Warehouse &middot; ArcBest</td></tr>' +
     '<tr><td style="padding:10px 12px;border-top:3px solid ' + TEAL + ';font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#4A4A4A;">' +
-    linkPhones_('Doors 34–41 are used for loading and unloading. Call 479-651-3382 for your door assignment. Paperwork may say 8501 State Hwy 45; we are the building just south of Americold.') + '</td></tr></table>';
+    linkPhones_('Doors 34–41 are used for loading and unloading. Call 479-651-0823 for your door assignment. Paperwork may say 8501 State Hwy 45; we are the building just south of Americold.') + '</td></tr></table>';
   arrive += photo;
   var manage = button_('Reschedule or cancel', p.manage_url) +
     '<p style="font-size:14px;color:#4A4A4A;margin:0;"><a href="' + mapsUrl_(p) + '" style="color:' + BLUE + ';">Directions to ' + esc_(p.site_address) + '</a></p>';
@@ -246,5 +278,6 @@ function build_(kind, p) {
           button_('Open dock board', baseUrl_(p) + '?view=board', DARK)),
         text: 'Dock schedule ' + p.pretty_date + '\n\n' + items.map(function (a) { return fmtT_(a.local_time) + '  ' + a.direction + '  ' + a.carrier_name + '  ' + a.ref_no; }).join('\n') };
   }
+  if (kind === 'wms') return wmsEmail_(p);
   throw new Error('Unknown email kind: ' + kind);
 }

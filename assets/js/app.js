@@ -2,7 +2,7 @@
    Data: Supabase (LWH Companion project, appt_* RPCs). Email: GAS mailer reads appt_outbox. */
 (() => {
   'use strict';
-  const VERSION = '1.1.1';
+  const VERSION = '1.2.0';
   const SB = 'https://tjivcqxnkftujceumdtx.supabase.co';
   const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqaXZjcXhua2Z0dWpjZXVtZHR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4OTE5NDMsImV4cCI6MjEwMDQ2Nzk0M30.GzDc-_u92jvAHq7eG1X-1cet5Av9qF3ZDEVJMRKEP0E';
   const WX = { lat: 35.333, lon: -94.300, name: 'Fort Smith' };
@@ -39,7 +39,7 @@
   const mapView = () => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(mapQ());
   // phone numbers in text become tap-to-call links
   const linkPhones = (t) => esc(t).replace(/\(?\b\d{3}\)?[-.\s]?\d{3}[-.\s]\d{4}\b/g, (m) => '<a href="tel:+1' + m.replace(/\D/g, '') + '">' + m + '</a>');
-  const ENTRY_CAPTION = 'Doors 34–41 are used for loading and unloading. Call 479-651-3382 for your door assignment. Paperwork may say 8501 State Hwy 45; we are the building just south of Americold.';
+  const ENTRY_CAPTION = 'Doors 34–41 are used for loading and unloading. Call 479-651-0823 for your door assignment. Paperwork may say 8501 State Hwy 45; we are the building just south of Americold.';
   const entryPhoto = () => '<figure class="entry-photo"><a href="assets/img/entrance.jpg?v=3" target="_blank" rel="noopener"><img src="assets/img/entrance.jpg?v=3" alt="Logistics Warehouse – ArcBest dock doors" loading="lazy"><span class="photo-tag">Logistics Warehouse · ArcBest</span></a><figcaption>' + linkPhones(ENTRY_CAPTION) + '</figcaption></figure>';
   const mapEmbed = (h) => '<div class="map-box"><iframe title="Map to ' + esc(S.cfg.site_address) + '" loading="lazy" referrerpolicy="no-referrer-when-downgrade" style="height:' + (h || 220) + 'px" src="https://maps.google.com/maps?q=' + encodeURIComponent(mapQ()) + '&z=15&output=embed"></iframe>' +
     '<div class="map-links"><a href="' + mapsUrl() + '" target="_blank" rel="noopener">Get directions</a><a href="' + mapView() + '" target="_blank" rel="noopener">Open in Google Maps</a></div></div>';
@@ -559,7 +559,7 @@
     app().innerHTML = '<div class="board-ctrl"><button class="btn btn-ghost btn-sm" type="button" id="bPrev">‹</button><div class="date-lbl" id="bLbl">' + esc(fmtD(d, true)) + '</div>' +
       '<button class="btn btn-ghost btn-sm" type="button" id="bNext">›</button><button class="btn btn-ghost btn-sm" type="button" id="bToday">Today</button>' +
       '<input class="input" type="date" id="bDate" value="' + d + '" style="width:auto;padding:7px 10px">' +
-      '<span style="flex:1"></span><label class="switch"><input type="checkbox" id="bCan" ' + (S.team.showCancelled ? 'checked' : '') + '> Show cancelled</label>' +
+      '<span style="flex:1"></span><button class="btn btn-ghost btn-sm" type="button" id="bWms">Email WMS list</button><label class="switch"><input type="checkbox" id="bCan" ' + (S.team.showCancelled ? 'checked' : '') + '> Show cancelled</label>' +
       (canEdit() ? '<button class="btn btn-red btn-sm" type="button" id="bBook">+ Book</button>' : '') + '</div>' +
       '<div class="week" id="week"></div><div class="tiles" id="tiles"></div><div id="lanes"><div class="skel" style="height:300px"></div></div>';
     const move = (n) => { S.team.date = addDays(S.team.date, n); vBoard(); };
@@ -568,6 +568,7 @@
     $('#bDate').onchange = (e) => { if (e.target.value) { S.team.date = e.target.value; vBoard(); } };
     $('#bCan').onchange = (e) => { S.team.showCancelled = e.target.checked; renderBoard(); };
     const bb = $('#bBook'); if (bb) bb.onclick = () => teamBookModal({ date: S.team.date });
+    $('#bWms').onclick = () => wmsModal(S.team.date);
     await refreshBoard();
     S.team.timer = setInterval(() => { if (document.visibilityState === 'visible' && !$('#modalHost').innerHTML) refreshBoard(true); }, 30000);
   }
@@ -777,6 +778,23 @@
     };
   }
 
+  // ---------- WMS load list email (any day, on demand) ----------
+  function wmsModal(d) {
+    const st = (S.team.data && S.team.data.settings) || (S.team.cal && S.team.cal.settings) || {};
+    const m = modal('Email WMS load list', '<p>Sends <b>' + esc(fmtD(d, true)) + '</b>: appointment times, carriers and PO/BOL numbers (inbound and outbound), with a spreadsheet attached.</p>' +
+      '<div class="field" style="margin-top:12px"><label>Send to</label><textarea class="input" id="wTo" rows="2">' + esc(st.wms_emails || '') + '</textarea><div class="hint">Separate with commas. The 5 AM email always goes to the list in Settings.</div></div>',
+    '<button class="btn btn-ghost" type="button" id="wX">Cancel</button><button class="btn btn-red" type="button" id="wGo">Send now</button>');
+    $('#wX', m.el).onclick = m.close;
+    $('#wGo', m.el).onclick = async () => {
+      busy(true, 'Sending…');
+      try {
+        const r = await trpc('appt_admin_send_wms', { p_date: d, p_to: $('#wTo').value });
+        if (!r.ok) { toast(r.message, true); return; }
+        m.close(); toast('Queued: ' + r.count + ' load' + (r.count === 1 ? '' : 's') + ' to ' + r.to + '. Arrives within a minute.');
+      } catch (e) { if (e.message !== 'signed_out') toast(e.message, true); } finally { busy(false); }
+    };
+  }
+
   // ---------- month calendar ----------
   async function vCalendar() {
     if (!S.team.calMonth) S.team.calMonth = ctNow().date.slice(0, 7);
@@ -854,11 +872,12 @@
       '<div class="grow"><div class="t">' + esc(a.carrier_name) + '</div><div class="s">PO/BOL <b>' + esc(a.ref_no) + '</b> · ' + esc(a.trailer_type) + ' · ' + esc(a.conf_no) + '</div></div>' +
       '<div class="chips-r">' + (a.door ? '<span class="door-chip">Door ' + esc(a.door) + '</span>' : '') + '<span class="st st-' + a.status + '">' + STATUS[a.status] + '</span></div></div>';
     el.innerHTML = '<div class="card" style="margin-top:16px"><div class="card-head"><h2>' + esc(fmtD(d, true)) + ' · ' + ni + ' in · ' + (live.length - ni) + ' out</h2>' +
-      '<div style="display:flex;gap:8px"><button class="btn btn-ghost btn-sm" type="button" id="cdBoard">Open dock board</button>' + (canEdit() ? '<button class="btn btn-red btn-sm" type="button" id="cdBook">+ Book</button>' : '') + '</div></div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" type="button" id="cdWms">Email WMS list</button><button class="btn btn-ghost btn-sm" type="button" id="cdBoard">Open dock board</button>' + (canEdit() ? '<button class="btn btn-red btn-sm" type="button" id="cdBook">+ Book</button>' : '') + '</div></div>' +
       '<div class="card-body flush">' + (blk.length ? blk.map((b) => '<div class="list-row"><div class="grow s">⛔ ' + (b.start ? fmtT(b.start) + ' – ' + fmtT(b.end) : 'All day') + ' · ' + esc(b.reason || 'Blocked') + '</div></div>').join('') : '') +
       (list.length ? list.map(row).join('') : '<div class="empty">No appointments this day.</div>') + '</div></div>';
     $$('#cDay .cal-row').forEach((r) => r.onclick = () => apptModal(Number(r.dataset.id)));
     $('#cdBoard').onclick = () => { S.team.date = d; go('board'); };
+    $('#cdWms').onclick = () => wmsModal(d);
     const bk = $('#cdBook'); if (bk) bk.onclick = () => teamBookModal({ date: d });
   }
   function exportMonthCsv() {
@@ -961,6 +980,8 @@
       '<div class="hint" style="margin-top:8px">Close is when the last appointment must end (4:00 PM close = last 30-min slot at 3:30).</div></div></div>' +
       '<div class="card"><div class="card-head"><h2>Email</h2></div><div class="card-body">' +
       '<div class="field"><label>LWH team emails</label><textarea class="input" name="team_emails" rows="2"' + dis + '>' + esc(s.team_emails) + '</textarea><div class="hint">Separate with commas. New bookings, changes, cancels and the 6 AM schedule.</div></div>' +
+      '<div class="field"><label>WMS load list emails</label><textarea class="input" name="wms_emails" rows="2"' + dis + '>' + esc(s.wms_emails || '') + '</textarea><div class="hint">Gets the day\'s loads (time, carrier, PO/BOL) every open day at the time below, to build loads in the WMS.</div></div>' +
+      '<div class="field"><label>WMS email time</label><select class="input" name="wms_hour"' + dis + '>' + Array.from({ length: 24 }, (_, h) => '<option value="' + h + '"' + (Number(s.wms_hour) === h ? ' selected' : '') + '>' + fmtT(String(h).padStart(2, '0') + ':00') + '</option>').join('') + '</select></div>' +
       '<div class="field"><label>ArcBest emails</label><textarea class="input" name="customer_emails" rows="2"' + dis + '>' + esc(s.customer_emails) + '</textarea><div class="hint">Optional. Get the same team emails.</div></div></div></div>' +
       '<div class="card"><div class="card-head"><h2>Carrier info</h2></div><div class="card-body">' +
       '<div class="field"><label>Site address</label><input class="input" name="site_address" value="' + esc(s.site_address) + '"' + dis + '></div>' +
