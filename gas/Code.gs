@@ -187,6 +187,11 @@ function ics_(p, cancel) {
 function build_(kind, p) {
   var color = p.direction === 'OUT' ? AMBER : BLUE;
   var arrive = '<p style="margin:14px 0 0;padding:12px 14px;background:#E8F0FA;border-left:4px solid ' + BLUE + ';font-size:15px;"><b>When you arrive:</b> ' + esc_(p.instructions) + '</p>';
+  var photo = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:14px 0 0;border:1px solid #E2E2E2;"><tr><td style="padding:0;">' +
+    '<img src="' + esc_(baseUrl_(p) + 'assets/img/entrance.jpg') + '" width="550" alt="Truck entrance" style="display:block;width:100%;max-width:550px;height:auto;border:0;"></td></tr>' +
+    '<tr><td style="padding:10px 12px;border-top:3px solid ' + TEAL + ';font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#4A4A4A;">' +
+    '<b>Turn in here:</b> the driveway to the brick office with the red roof, the building just south of Americold. Paperwork may say 8501 State Hwy 45; this is the right place.</td></tr></table>';
+  arrive += photo;
   var manage = button_('Reschedule or cancel', p.manage_url) +
     '<p style="font-size:14px;color:#4A4A4A;margin:0;"><a href="' + mapsUrl_(p) + '" style="color:' + BLUE + ';">Directions to ' + esc_(p.site_address) + '</a></p>';
   var board = baseUrl_(p) + '?view=board';

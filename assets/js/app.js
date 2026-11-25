@@ -2,7 +2,7 @@
    Data: Supabase (LWH Companion project, appt_* RPCs). Email: GAS mailer reads appt_outbox. */
 (() => {
   'use strict';
-  const VERSION = '1.0.2';
+  const VERSION = '1.0.3';
   const SB = 'https://tjivcqxnkftujceumdtx.supabase.co';
   const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqaXZjcXhua2Z0dWpjZXVtZHR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4OTE5NDMsImV4cCI6MjEwMDQ2Nzk0M30.GzDc-_u92jvAHq7eG1X-1cet5Av9qF3ZDEVJMRKEP0E';
   const WX = { lat: 35.333, lon: -94.300, name: 'Fort Smith' };
@@ -37,6 +37,8 @@
   const mapQ = () => (S.cfg && S.cfg.map_q) || (S.cfg && S.cfg.site_address) || '';
   const mapsUrl = () => 'https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=' + encodeURIComponent(mapQ());
   const mapView = () => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(mapQ());
+  const ENTRY_CAPTION = 'Turn in here: the driveway to the brick office with the red roof, the building just south of Americold. Paperwork may say 8501 State Hwy 45; this is the right place.';
+  const entryPhoto = () => '<figure class="entry-photo"><a href="assets/img/entrance.jpg?v=1" target="_blank" rel="noopener"><img src="assets/img/entrance.jpg?v=1" alt="Logistics Warehouse truck entrance and dock doors" loading="lazy"></a><figcaption>' + esc(ENTRY_CAPTION) + '</figcaption></figure>';
   const mapEmbed = (h) => '<div class="map-box"><iframe title="Map to ' + esc(S.cfg.site_address) + '" loading="lazy" referrerpolicy="no-referrer-when-downgrade" style="height:' + (h || 220) + 'px" src="https://maps.google.com/maps?q=' + encodeURIComponent(mapQ()) + '&z=15&output=embed"></iframe>' +
     '<div class="map-links"><a href="' + mapsUrl() + '" target="_blank" rel="noopener">Get directions</a><a href="' + mapView() + '" target="_blank" rel="noopener">Open in Google Maps</a></div></div>';
 
@@ -158,7 +160,7 @@
       '<div class="hero"><h1>Schedule a dock appointment</h1>' +
       '<p>Book, change or cancel your pickup or delivery in about a minute. You\'ll get a confirmation by email.</p>' +
       '<div class="addr">📍 ' + esc(c.site_address) + '</div>' +
-      (hrsTxt ? '<div class="hint" style="margin-top:4px">Dock hours: ' + esc(hrsTxt) + '</div>' : '') + mapEmbed(200) + '</div>' +
+      (hrsTxt ? '<div class="hint" style="margin-top:4px">Dock hours: ' + esc(hrsTxt) + '</div>' : '') + entryPhoto() + mapEmbed(200) + '</div>' +
       '<div class="dir-pick">' +
       '<button class="dir-btn" type="button" data-d="IN"><span class="tag">Delivering to us</span><b>Inbound</b><span>Drop off / unload at our dock</span></button>' +
       '<button class="dir-btn out" type="button" data-d="OUT"><span class="tag">Picking up from us</span><b>Outbound</b><span>Pick up / load at our dock</span></button></div>' +
@@ -354,7 +356,7 @@
       '<div class="hint" style="margin-top:6px">A confirmation was sent to <b>' + esc(a.email) + '</b>. Use the link in it to reschedule or cancel.</div>' +
       apptDetailsHtml(a) +
       '<div class="note" style="text-align:left;margin-top:16px"><b>When you arrive:</b> ' + esc(S.cfg.instructions) + '</div>' +
-      '<div style="text-align:left;margin-top:14px">' + mapEmbed(220) + '</div>' +
+      '<div style="text-align:left;margin-top:14px">' + entryPhoto() + mapEmbed(220) + '</div>' +
       '<div class="btn-row"><button class="btn btn-red" type="button" id="ics">Add to calendar</button>' +
       '<a class="btn btn-ghost" href="' + mapsUrl() + '" target="_blank" rel="noopener">Directions</a>' +
       '<button class="btn btn-ghost" type="button" id="notif">Get notifications</button></div>' +
@@ -445,7 +447,7 @@
       (M.can_change ? '<div class="btn-row" style="margin-top:18px"><button class="btn btn-red" type="button" id="mRes">Reschedule</button><button class="btn btn-ghost" type="button" id="mCan" style="color:#9E0E26">Cancel appointment</button></div>'
         : (a.status === 'BOOKED' ? '<div class="note warn" style="margin-top:16px">This appointment is too close to change online. Please call the office.</div>' : '')) +
       (a.status !== 'CANCELLED' ? '<div class="btn-row" style="margin-top:10px"><button class="btn btn-ghost" type="button" id="mIcs">Add to calendar</button><a class="btn btn-ghost" href="' + mapsUrl() + '" target="_blank" rel="noopener">Directions</a><button class="btn btn-ghost" type="button" id="mNot">Get notifications</button></div>' : '') +
-      (a.status !== 'CANCELLED' ? '<div style="margin-top:16px">' + mapEmbed(220) + '</div>' : '') +
+      (a.status !== 'CANCELLED' ? '<div style="margin-top:16px">' + entryPhoto() + mapEmbed(220) + '</div>' : '') +
       '</div></div>';
     const rs = $('#mRes'); if (rs) rs.onclick = () => startBook(a.direction, { c: a.conf_no, k: M.token });
     const cn = $('#mCan'); if (cn) cn.onclick = () => confirmCancel(a, M.token);
