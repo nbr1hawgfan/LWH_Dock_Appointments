@@ -3,16 +3,26 @@
    To change the palette, edit only the four brand variables below.
    ========================================================================== */
 :root {
-  --red: #003399;        /* primary band / buttons (ArcBest navy-blue) */
-  --red-dark: #002270;
-  --red-tint: #E6ECF7;
-  --black: #0B1A33;      /* nav bar / dark accents (deep navy) */
-  --black-2: #13284D;
-  --accent: #166AB2;     /* secondary blue */
-  --in: #166AB2;  --in-tint: #E5F0FA;
+  --red: #0D2E4A;        /* ArcBest Deep Blue: band / primary buttons */
+  --red-dark: #081E31;
+  --red-tint: #E7EEF4;
+  --black: #071A2B;      /* nav bar / dark accents */
+  --black-2: #10304B;
+  --teal: #3CAF96;       /* ArcBest Teal: accent lines, highlights */
+  --accent: #1F7F6B;     /* darker teal for text & links (readable on white) */
+  --in: #1F7F6B;  --in-tint: #E3F4EF;
   --out: #A85F00; --out-tint: #FFF3DF;
 }
 a { color: var(--accent); }
+.brandbar { border-bottom: 4px solid var(--teal); }
+.nav button.active { border-bottom-color: var(--teal); }
+.hero { border-left-color: var(--teal); }
+.steps div.on { border-bottom-color: var(--teal); }
+.tile { border-top-color: var(--red); }
+.slot { border-color: var(--teal); }
+.slot:hover { background: var(--in-tint); }
+.week button.today { border-top-color: var(--teal); }
+.lanes .tm.now { color: var(--accent); }
 body { font-size: 16px; }
 .brandbar .wrap { min-height: 76px; }
 .brand-sub b { font-weight: 700; }

@@ -1,6 +1,6 @@
 # LWH Dock Appointments
 
-Carrier dock appointment scheduling for **Logistics Warehouse** at 8501 State Hwy 45, Fort Smith, AR (ArcBest Logistics account).
+Carrier dock appointment scheduling for **Logistics Warehouse** at 8501 State Hwy 45, Fort Smith, AR (ArcBest account).
 Static PWA on GitHub Pages · data in Supabase (LWH Companion project, `appt_*`) · email sent by Google Apps Script.
 
 ## How it fits together
@@ -27,7 +27,7 @@ Info is remembered on the device for the next booking. Carriers can reschedule o
 Changing the appointment length never moves existing bookings; the overlap check keeps a 30-min booking from being double-booked by new 20-min slots.
 
 ## Changing the colors
-Edit the four variables at the top of `assets/css/app.css` (`--red` = main band, `--black` = nav bar, `--accent`, `--red-dark`).
+Edit the four variables at the top of `assets/css/app.css` (`--red` = main band (ArcBest Deep Blue #0D2E4A), `--teal` = accent (ArcBest Teal #3CAF96), `--black` = nav bar, `--accent` = link/text teal).
 
 ## Email + calendar setup (one time)
 `gas/Code.gs` goes into **two** Apps Script projects (same file):

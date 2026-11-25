@@ -21,7 +21,7 @@ const CAL_ID = 'c_9d6e701ea3c5be07a1e615b0974baf1d13e78f3c40ff22d99bf3b51a152546
 const SITE_ADDRESS = '8501 State Hwy 45, Fort Smith, AR 72916';
 const KEY_FOR_SETUP = 'PASTE_MAILER_KEY_HERE';
 
-const NAVY = '#003399', DARK = '#0B1A33', BLUE = '#166AB2', AMBER = '#A85F00', GREEN = '#1E7B3C', RED = '#9E0E26';
+const NAVY = '#0D2E4A', DARK = '#071A2B', BLUE = '#1F7F6B', TEAL = '#3CAF96', AMBER = '#A85F00', GREEN = '#1E7B3C', RED = '#9E0E26';
 
 function saveKey_() {
   if (KEY_FOR_SETUP && KEY_FOR_SETUP.indexOf('PASTE') !== 0) PropertiesService.getScriptProperties().setProperty('APPT_GAS_KEY', KEY_FOR_SETUP);
@@ -136,8 +136,9 @@ function shell_(title, color, inner, footer) {
     '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:100%;background:#FFFFFF;border:1px solid #E2E2E2;">' +
     '<tr><td style="background:' + NAVY + ';padding:18px 24px;font-family:Arial,Helvetica,sans-serif;color:#FFFFFF;">' +
     '<div style="font-size:22px;font-weight:bold;">Logistics Warehouse</div>' +
-    '<div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;margin-top:2px;">Dock Appointments &middot; ArcBest Logistics</div></td></tr>' +
-    '<tr><td style="background:' + color + ';height:6px;font-size:0;line-height:0;">&nbsp;</td></tr>' +
+    '<div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;margin-top:2px;">Dock Appointments &middot; ArcBest</div></td></tr>' +
+    '<tr><td style="background:' + TEAL + ';height:4px;font-size:0;line-height:0;">&nbsp;</td></tr>' +
+    '<tr><td style="background:' + color + ';height:4px;font-size:0;line-height:0;">&nbsp;</td></tr>' +
     '<tr><td style="padding:24px;font-family:Arial,Helvetica,sans-serif;font-size:17px;line-height:1.5;color:#1A1A1A;">' +
     '<div style="font-size:24px;font-weight:bold;margin-bottom:12px;">' + esc_(title) + '</div>' + inner + '</td></tr>' +
     '<tr><td style="background:' + DARK + ';padding:14px 24px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#C9D2E3;">' +
