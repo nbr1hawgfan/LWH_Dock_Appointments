@@ -189,7 +189,8 @@ function build_(kind, p) {
   var color = p.direction === 'OUT' ? AMBER : BLUE;
   var arrive = '<p style="margin:14px 0 0;padding:12px 14px;background:#E8F0FA;border-left:4px solid ' + BLUE + ';font-size:15px;"><b>When you arrive:</b> ' + linkPhones_(p.instructions) + '</p>';
   var photo = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:14px 0 0;border:1px solid #E2E2E2;"><tr><td style="padding:0;">' +
-    '<img src="' + esc_(baseUrl_(p) + 'assets/img/entrance.jpg?v=2') + '" width="550" alt="Dock doors" style="display:block;width:100%;max-width:550px;height:auto;border:0;"></td></tr>' +
+    '<img src="' + esc_(baseUrl_(p) + 'assets/img/entrance.jpg?v=3') + '" width="550" alt="Logistics Warehouse - ArcBest dock doors" style="display:block;width:100%;max-width:550px;height:auto;border:0;"></td></tr>' +
+    '<tr><td style="background:' + NAVY + ';padding:7px 12px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:#FFFFFF;">Logistics Warehouse &middot; ArcBest</td></tr>' +
     '<tr><td style="padding:10px 12px;border-top:3px solid ' + TEAL + ';font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#4A4A4A;">' +
     linkPhones_('Doors 34–41 are used for loading and unloading. Call 479-651-3382 for your door assignment. Paperwork may say 8501 State Hwy 45; we are the building just south of Americold.') + '</td></tr></table>';
   arrive += photo;

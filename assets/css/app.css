@@ -183,3 +183,7 @@ body { font-size: 16px; }
 .entry-photo { margin: 12px 0 0; border: 1px solid var(--line); background: #fff; }
 .entry-photo img { display: block; width: 100%; height: auto; }
 .entry-photo figcaption { padding: 8px 12px; font-size: 14px; line-height: 1.4; color: var(--ink-2); border-top: 3px solid var(--teal); }
+
+.entry-photo > a { position: relative; display: block; }
+.entry-photo .photo-tag { position: absolute; left: 0; bottom: 0; background: rgba(13,46,74,.92); color: #fff; font-family: var(--head); font-weight: 600; font-size: 15px; letter-spacing: .6px; text-transform: uppercase; padding: 6px 12px; border-top: 3px solid var(--teal); }
+@media (max-width: 720px) { .entry-photo .photo-tag { font-size: 12.5px; padding: 4px 9px; } }
