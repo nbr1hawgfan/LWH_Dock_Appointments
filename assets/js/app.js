@@ -2,7 +2,7 @@
    Data: Supabase (LWH Companion project, appt_* RPCs). Email: GAS mailer reads appt_outbox. */
 (() => {
   'use strict';
-  const VERSION = '1.0.3';
+  const VERSION = '1.0.4';
   const SB = 'https://tjivcqxnkftujceumdtx.supabase.co';
   const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqaXZjcXhua2Z0dWpjZXVtZHR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4OTE5NDMsImV4cCI6MjEwMDQ2Nzk0M30.GzDc-_u92jvAHq7eG1X-1cet5Av9qF3ZDEVJMRKEP0E';
   const WX = { lat: 35.333, lon: -94.300, name: 'Fort Smith' };
@@ -37,8 +37,10 @@
   const mapQ = () => (S.cfg && S.cfg.map_q) || (S.cfg && S.cfg.site_address) || '';
   const mapsUrl = () => 'https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=' + encodeURIComponent(mapQ());
   const mapView = () => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(mapQ());
-  const ENTRY_CAPTION = 'Turn in here: the driveway to the brick office with the red roof, the building just south of Americold. Paperwork may say 8501 State Hwy 45; this is the right place.';
-  const entryPhoto = () => '<figure class="entry-photo"><a href="assets/img/entrance.jpg?v=1" target="_blank" rel="noopener"><img src="assets/img/entrance.jpg?v=1" alt="Logistics Warehouse truck entrance and dock doors" loading="lazy"></a><figcaption>' + esc(ENTRY_CAPTION) + '</figcaption></figure>';
+  // phone numbers in text become tap-to-call links
+  const linkPhones = (t) => esc(t).replace(/\(?\b\d{3}\)?[-.\s]?\d{3}[-.\s]\d{4}\b/g, (m) => '<a href="tel:+1' + m.replace(/\D/g, '') + '">' + m + '</a>');
+  const ENTRY_CAPTION = 'Doors 34–41 are used for loading and unloading. Call 479-651-3382 for your door assignment. Paperwork may say 8501 State Hwy 45; we are the building just south of Americold.';
+  const entryPhoto = () => '<figure class="entry-photo"><a href="assets/img/entrance.jpg?v=2" target="_blank" rel="noopener"><img src="assets/img/entrance.jpg?v=2" alt="Logistics Warehouse dock doors 30 to 41" loading="lazy"></a><figcaption>' + linkPhones(ENTRY_CAPTION) + '</figcaption></figure>';
   const mapEmbed = (h) => '<div class="map-box"><iframe title="Map to ' + esc(S.cfg.site_address) + '" loading="lazy" referrerpolicy="no-referrer-when-downgrade" style="height:' + (h || 220) + 'px" src="https://maps.google.com/maps?q=' + encodeURIComponent(mapQ()) + '&z=15&output=embed"></iframe>' +
     '<div class="map-links"><a href="' + mapsUrl() + '" target="_blank" rel="noopener">Get directions</a><a href="' + mapView() + '" target="_blank" rel="noopener">Open in Google Maps</a></div></div>';
 
@@ -355,7 +357,7 @@
       '<div class="when">' + DIRNAME[a.direction] + ' · ' + esc(fmtD(a.local_date, true)) + ' at ' + fmtT(a.local_time) + '</div>' +
       '<div class="hint" style="margin-top:6px">A confirmation was sent to <b>' + esc(a.email) + '</b>. Use the link in it to reschedule or cancel.</div>' +
       apptDetailsHtml(a) +
-      '<div class="note" style="text-align:left;margin-top:16px"><b>When you arrive:</b> ' + esc(S.cfg.instructions) + '</div>' +
+      '<div class="note" style="text-align:left;margin-top:16px"><b>When you arrive:</b> ' + linkPhones(S.cfg.instructions) + '</div>' +
       '<div style="text-align:left;margin-top:14px">' + entryPhoto() + mapEmbed(220) + '</div>' +
       '<div class="btn-row"><button class="btn btn-red" type="button" id="ics">Add to calendar</button>' +
       '<a class="btn btn-ghost" href="' + mapsUrl() + '" target="_blank" rel="noopener">Directions</a>' +

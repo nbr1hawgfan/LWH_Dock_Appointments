@@ -166,6 +166,7 @@ function details_(p) {
   return rows_([['PO / BOL', p.ref_no], ['Trailer', p.trailer_type + (p.trailer_no ? ' #' + p.trailer_no : '')], ['Carrier', p.carrier_name + (p.scac ? ' (' + p.scac + ')' : '')],
     ['Contact', p.contact_name], ['Phone', p.phone], ['Email', p.email], ['Notes', p.notes], ['Location', p.site_address]]);
 }
+function linkPhones_(t) { return esc_(t).replace(/\(?\b\d{3}\)?[-.\s]?\d{3}[-.\s]\d{4}\b/g, function (m) { return '<a href="tel:+1' + m.replace(/\D/g, '') + '" style="color:' + BLUE + ';font-weight:bold;">' + m + '</a>'; }); }
 function mapsUrl_(p) { return 'https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=' + encodeURIComponent(p.map_q || p.site_address); }
 function textOf_(p, lead) {
   return lead + '\n\nConfirmation: ' + p.conf_no + '\n' + dirName_(p.direction) + ' - ' + p.pretty_date + ' at ' + p.pretty_time +
@@ -186,11 +187,11 @@ function ics_(p, cancel) {
 // ---------------------------------------------------------------- templates
 function build_(kind, p) {
   var color = p.direction === 'OUT' ? AMBER : BLUE;
-  var arrive = '<p style="margin:14px 0 0;padding:12px 14px;background:#E8F0FA;border-left:4px solid ' + BLUE + ';font-size:15px;"><b>When you arrive:</b> ' + esc_(p.instructions) + '</p>';
+  var arrive = '<p style="margin:14px 0 0;padding:12px 14px;background:#E8F0FA;border-left:4px solid ' + BLUE + ';font-size:15px;"><b>When you arrive:</b> ' + linkPhones_(p.instructions) + '</p>';
   var photo = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:14px 0 0;border:1px solid #E2E2E2;"><tr><td style="padding:0;">' +
-    '<img src="' + esc_(baseUrl_(p) + 'assets/img/entrance.jpg') + '" width="550" alt="Truck entrance" style="display:block;width:100%;max-width:550px;height:auto;border:0;"></td></tr>' +
+    '<img src="' + esc_(baseUrl_(p) + 'assets/img/entrance.jpg?v=2') + '" width="550" alt="Dock doors" style="display:block;width:100%;max-width:550px;height:auto;border:0;"></td></tr>' +
     '<tr><td style="padding:10px 12px;border-top:3px solid ' + TEAL + ';font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#4A4A4A;">' +
-    '<b>Turn in here:</b> the driveway to the brick office with the red roof, the building just south of Americold. Paperwork may say 8501 State Hwy 45; this is the right place.</td></tr></table>';
+    linkPhones_('Doors 34–41 are used for loading and unloading. Call 479-651-3382 for your door assignment. Paperwork may say 8501 State Hwy 45; we are the building just south of Americold.') + '</td></tr></table>';
   arrive += photo;
   var manage = button_('Reschedule or cancel', p.manage_url) +
     '<p style="font-size:14px;color:#4A4A4A;margin:0;"><a href="' + mapsUrl_(p) + '" style="color:' + BLUE + ';">Directions to ' + esc_(p.site_address) + '</a></p>';
