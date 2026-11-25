@@ -2,7 +2,7 @@
    Data: Supabase (LWH Companion project, appt_* RPCs). Email: GAS mailer reads appt_outbox. */
 (() => {
   'use strict';
-  const VERSION = '1.0.6';
+  const VERSION = '1.1.0';
   const SB = 'https://tjivcqxnkftujceumdtx.supabase.co';
   const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqaXZjcXhua2Z0dWpjZXVtZHR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4OTE5NDMsImV4cCI6MjEwMDQ2Nzk0M30.GzDc-_u92jvAHq7eG1X-1cet5Av9qF3ZDEVJMRKEP0E';
   const WX = { lat: 35.333, lon: -94.300, name: 'Fort Smith' };
@@ -118,7 +118,7 @@
   function renderChrome() {
     const nav = $('#nav');
     const items = teamMode()
-      ? [['board', 'Dock Board'], ['tbook', 'Book'], ['search', 'Search'], ['blocks', 'Block Time'], ['settings', 'Settings']]
+      ? [['board', 'Dock Board'], ['calendar', 'Calendar'], ['tbook', 'Book'], ['search', 'Search'], ['blocks', 'Block Time'], ['settings', 'Settings']]
       : [['home', 'Home'], ['book', 'Book'], ['mine', 'My Appointments'], ['find', 'Find']];
     nav.innerHTML = items.map(([v, l]) => '<button type="button" data-v="' + v + '" class="' + (S.view === v || (v === 'book' && S.view === 'details') ? 'active' : '') + '">' + l + (v === 'mine' ? mineCount() : '') + '</button>').join('') +
       (teamMode() ? '<span class="spacer"></span><button type="button" class="logout" data-v="logout">Sign out</button>' : '');
@@ -144,7 +144,7 @@
     history.replaceState(null, '', u.pathname + u.search);
     renderChrome();
     window.scrollTo(0, 0);
-    const R = { home: vHome, book: vBook, details: vDetails, done: vDone, mine: vMine, find: vFind, manage: vManage, login: vLogin, board: vBoard, tbook: () => teamBookModal({}), search: vSearch, blocks: vBlocks, settings: vSettings }[v];
+    const R = { home: vHome, book: vBook, details: vDetails, done: vDone, mine: vMine, find: vFind, manage: vManage, login: vLogin, board: vBoard, calendar: vCalendar, tbook: () => teamBookModal({}), search: vSearch, blocks: vBlocks, settings: vSettings }[v];
     if (v === 'tbook') { S.view = 'board'; renderChrome(); vBoard(); teamBookModal({}); return; }
     (R || vHome)();
   }
@@ -663,7 +663,8 @@
       '<div class="m"><span class="st st-' + (late ? 'LATE' : a.status) + '">' + (late ? 'Late' : STATUS[a.status]) + '</span>' + (a.door ? '<span class="door">Door ' + esc(a.door) + '</span>' : '') + '</div></button>';
   }
 
-  function findAppt(id) { return (S.team.data && S.team.data.appointments.find((a) => a.id === id)) || (S.team.search || []).find((a) => a.id === id); }
+  function findAppt(id) { return (S.team.data && S.team.data.appointments.find((a) => a.id === id)) || (S.team.cal && S.team.cal.appointments.find((a) => a.id === id)) || (S.team.search || []).find((a) => a.id === id); }
+  const refreshCurrent = (q) => (S.view === 'calendar' ? loadCal() : refreshBoard(q));
   function doorOptions(dir, cur) {
     const st = S.team.data ? S.team.data.settings : null;
     const list = st ? String(dir === 'IN' ? st.doors_in : st.doors_out).split(',').map((x) => x.trim()).filter(Boolean) : [];
@@ -701,7 +702,7 @@
       try {
         const r = await trpc('appt_admin_update', { p_id: a.id, p });
         if (!r.ok) { toast(r.message, true); return; }
-        m.close(); toast(p.status ? 'Marked ' + STATUS[p.status].toLowerCase() + '.' : 'Saved.'); await refreshBoard(true);
+        m.close(); toast(p.status ? 'Marked ' + STATUS[p.status].toLowerCase() + '.' : 'Saved.'); await refreshCurrent(true);
       } catch (e) { if (e.message !== 'signed_out') toast(e.message, true); } finally { busy(false); }
     };
     if (ed) {
@@ -737,7 +738,7 @@
       try {
         const r = await trpc('appt_admin_update', { p_id: a.id, p: { start: $('#tvTime').value }, p_force: $('#tvForce').checked });
         if (!r.ok) { toast(r.message + (['full', 'blocked'].includes(r.error) ? ' Tick Override to book anyway.' : ''), true); return; }
-        m.close(); toast('Moved. The carrier will get an email.'); await refreshBoard(true);
+        m.close(); toast('Moved. The carrier will get an email.'); await refreshCurrent(true);
       } catch (e) { if (e.message !== 'signed_out') toast(e.message, true); } finally { busy(false); }
     };
   }
@@ -770,9 +771,106 @@
         const r = await trpc('appt_admin_book', { p, p_force: $('#tbForce').checked });
         if (!r.ok) { toast(r.message + (['full', 'blocked', 'too_soon'].includes(r.error) ? ' Tick Override to book anyway.' : ''), true); return; }
         m.close(); toast('Booked ' + r.appointment.conf_no + (p.email ? '. Confirmation emailed.' : '.'));
-        S.team.date = r.appointment.local_date; if (S.view === 'board') await refreshBoard(); else go('board');
+        S.team.date = r.appointment.local_date; if (S.view === 'board') await refreshBoard(); else if (S.view === 'calendar') await loadCal(); else go('board');
       } catch (e) { if (e.message !== 'signed_out') toast(e.message, true); } finally { busy(false); }
     };
+  }
+
+  // ---------- month calendar ----------
+  async function vCalendar() {
+    if (!S.team.calMonth) S.team.calMonth = ctNow().date.slice(0, 7);
+    const ym = S.team.calMonth, first = pd(ym + '-01');
+    app().innerHTML = '<div class="board-ctrl"><button class="btn btn-ghost btn-sm" type="button" id="cPrev">‹</button>' +
+      '<div class="date-lbl">' + ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][first.getMonth()] + ' ' + first.getFullYear() + '</div>' +
+      '<button class="btn btn-ghost btn-sm" type="button" id="cNext">›</button><button class="btn btn-ghost btn-sm" type="button" id="cToday">This month</button>' +
+      '<span style="flex:1"></span><button class="btn btn-black btn-sm" type="button" id="cCsv">Export month (CSV)</button></div>' +
+      '<div class="tiles" id="cStats"></div><div class="cal" id="cal"><div class="skel" style="height:420px;grid-column:1/-1"></div></div><div id="cDay"></div>';
+    const mv = (n) => { const d = pd(ym + '-01'); d.setMonth(d.getMonth() + n); S.team.calMonth = ds(d).slice(0, 7); S.team.calSel = null; vCalendar(); };
+    $('#cPrev').onclick = () => mv(-1); $('#cNext').onclick = () => mv(1);
+    $('#cToday').onclick = () => { S.team.calMonth = ctNow().date.slice(0, 7); S.team.calSel = ctNow().date; vCalendar(); };
+    $('#cCsv').onclick = exportMonthCsv;
+    await loadCal();
+  }
+  async function loadCal() {
+    const ym = S.team.calMonth, first = pd(ym + '-01');
+    const gridStart = addDays(ym + '-01', -first.getDay());
+    const last = pd(ym + '-01'); last.setMonth(last.getMonth() + 1); last.setDate(0);
+    const gridEnd = addDays(ds(last), 6 - last.getDay());
+    try {
+      const r = await trpc('appt_admin_board', { p_from: gridStart, p_to: gridEnd });
+      if (!r.ok) { toast(r.message, true); return; }
+      S.team.cal = Object.assign(r, { gridStart, gridEnd, monthEnd: ds(last) });
+      renderCal();
+    } catch (e) { if (e.message !== 'signed_out') $('#cal').innerHTML = '<div class="note bad" style="grid-column:1/-1">' + esc(e.message) + '</div>'; }
+  }
+  function renderCal() {
+    const C = S.team.cal, st = C.settings, ym = S.team.calMonth, today = ctNow().date;
+    const inMonth = (d) => d.slice(0, 7) === ym;
+    const byDay = {};
+    C.appointments.forEach((a) => { (byDay[a.local_date] = byDay[a.local_date] || []).push(a); });
+    // month summary
+    const mon = C.appointments.filter((a) => inMonth(a.local_date));
+    const live = mon.filter((a) => a.status !== 'CANCELLED');
+    const arrived = live.filter((a) => a.arrived_at);
+    const onTime = arrived.filter((a) => new Date(a.arrived_at) <= new Date(new Date(a.start_at).getTime() + 15 * 60000)).length;
+    const turns = live.filter((a) => a.arrived_at && a.done_at).map((a) => (new Date(a.done_at) - new Date(a.arrived_at)) / 60000).filter((m) => m >= 0 && m < 24 * 60);
+    const avgTurn = turns.length ? Math.round(turns.reduce((x, y) => x + y, 0) / turns.length) : null;
+    const nIn = live.filter((a) => a.direction === 'IN').length;
+    $('#cStats').innerHTML =
+      tile('Booked', live.length, nIn + ' in · ' + (live.length - nIn) + ' out') +
+      tile('Done', live.filter((a) => a.status === 'DONE').length, mon.filter((a) => a.status === 'CANCELLED').length + ' cancelled') +
+      tile('On-time arrival', arrived.length ? Math.round(onTime / arrived.length * 100) + '%' : '—', 'within 15 min · ' + live.filter((a) => a.status === 'NO_SHOW').length + ' no-shows', 'amber') +
+      tile('Avg time on site', avgTurn == null ? '—' : avgTurn + 'm', 'check-in to done · ' + turns.length + ' loads', 'dark');
+    // grid
+    const cells = [];
+    for (let d = C.gridStart; d <= C.gridEnd; d = addDays(d, 1)) cells.push(d);
+    const bar = (n, max, cls) => max ? '<div class="cbar ' + cls + '"><i style="width:' + Math.min(100, Math.round(n / max * 100)) + '%"></i></div>' : '';
+    $('#cal').innerHTML = DOW.map((w) => '<div class="cal-h">' + w + '</div>').join('') + cells.map((d) => {
+      const h = st.hours.find((x) => x.dow === pd(d).getDay()), open = h && h.is_open;
+      const list = (byDay[d] || []).filter((a) => a.status !== 'CANCELLED');
+      const ni = list.filter((a) => a.direction === 'IN').length, no = list.length - ni;
+      const blk = C.blocks.filter((b) => b.date === d);
+      const full = (n, max) => max && n >= max ? ' full' : '';
+      return '<button type="button" class="cal-d' + (inMonth(d) ? '' : ' other') + (open ? '' : ' closed') + (d === today ? ' today' : '') + (d === S.team.calSel ? ' on' : '') + '" data-d="' + d + '">' +
+        '<div class="cn">' + pd(d).getDate() + '</div>' +
+        (open || list.length ? '<div class="cl in' + full(ni, st.daily_max_in) + '"><span>In</span><b>' + ni + (st.daily_max_in ? '<small>/' + st.daily_max_in + '</small>' : '') + '</b></div>' + bar(ni, st.daily_max_in, 'in') +
+          '<div class="cl out' + full(no, st.daily_max_out) + '"><span>Out</span><b>' + no + (st.daily_max_out ? '<small>/' + st.daily_max_out + '</small>' : '') + '</b></div>' + bar(no, st.daily_max_out, 'out')
+          : '<div class="cx">Closed</div>') +
+        (blk.length ? '<div class="cb">⛔ ' + esc(blk[0].reason || 'Blocked') + (blk.length > 1 ? ' +' + (blk.length - 1) : '') + '</div>' : '') + '</button>';
+    }).join('');
+    $$('#cal .cal-d').forEach((b) => b.onclick = () => { S.team.calSel = b.dataset.d; renderCal(); const el = $('#cDay'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+    renderCalDay();
+  }
+  function renderCalDay() {
+    const C = S.team.cal, d = S.team.calSel, el = $('#cDay');
+    if (!d) { el.innerHTML = '<div class="hint" style="margin-top:12px">Tap a day to see its loads.</div>'; return; }
+    const list = C.appointments.filter((a) => a.local_date === d).sort((x, y) => (x.local_time + x.direction).localeCompare(y.local_time + y.direction));
+    const live = list.filter((a) => a.status !== 'CANCELLED');
+    const ni = live.filter((a) => a.direction === 'IN').length;
+    const blk = C.blocks.filter((b) => b.date === d);
+    const row = (a) => '<div class="list-row cal-row' + (a.status === 'CANCELLED' ? ' cxl' : '') + '" data-id="' + a.id + '" role="button" tabindex="0">' +
+      '<div class="ct">' + fmtT(a.local_time) + '</div><span class="dirtag ' + a.direction + '">' + (a.direction === 'IN' ? 'In' : 'Out') + '</span>' +
+      '<div class="grow"><div class="t">' + esc(a.carrier_name) + '</div><div class="s">PO/BOL <b>' + esc(a.ref_no) + '</b> · ' + esc(a.trailer_type) + ' · ' + esc(a.conf_no) + '</div></div>' +
+      '<div class="chips-r">' + (a.door ? '<span class="door-chip">Door ' + esc(a.door) + '</span>' : '') + '<span class="st st-' + a.status + '">' + STATUS[a.status] + '</span></div></div>';
+    el.innerHTML = '<div class="card" style="margin-top:16px"><div class="card-head"><h2>' + esc(fmtD(d, true)) + ' · ' + ni + ' in · ' + (live.length - ni) + ' out</h2>' +
+      '<div style="display:flex;gap:8px"><button class="btn btn-ghost btn-sm" type="button" id="cdBoard">Open dock board</button>' + (canEdit() ? '<button class="btn btn-red btn-sm" type="button" id="cdBook">+ Book</button>' : '') + '</div></div>' +
+      '<div class="card-body flush">' + (blk.length ? blk.map((b) => '<div class="list-row"><div class="grow s">⛔ ' + (b.start ? fmtT(b.start) + ' – ' + fmtT(b.end) : 'All day') + ' · ' + esc(b.reason || 'Blocked') + '</div></div>').join('') : '') +
+      (list.length ? list.map(row).join('') : '<div class="empty">No appointments this day.</div>') + '</div></div>';
+    $$('#cDay .cal-row').forEach((r) => r.onclick = () => apptModal(Number(r.dataset.id)));
+    $('#cdBoard').onclick = () => { S.team.date = d; go('board'); };
+    const bk = $('#cdBook'); if (bk) bk.onclick = () => teamBookModal({ date: d });
+  }
+  function exportMonthCsv() {
+    const C = S.team.cal; if (!C) return;
+    const ym = S.team.calMonth;
+    const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    const rows = [['Date', 'Time', 'Direction', 'Confirmation', 'PO/BOL', 'Carrier', 'SCAC', 'Trailer type', 'Trailer #', 'Status', 'Door', 'Checked in', 'At door', 'Done', 'Booked by', 'Contact', 'Phone', 'Email']];
+    C.appointments.filter((a) => a.local_date.slice(0, 7) === ym).sort((x, y) => (x.local_date + x.local_time).localeCompare(y.local_date + y.local_time)).forEach((a) => rows.push([
+      a.local_date, fmtT(a.local_time), DIRNAME[a.direction], a.conf_no, a.ref_no, a.carrier_name, a.scac, a.trailer_type, a.trailer_no, STATUS[a.status], a.door,
+      fmtStamp(a.arrived_at), fmtStamp(a.at_door_at), fmtStamp(a.done_at), a.booked_by === 'carrier' ? 'Carrier online' : a.booked_by, a.contact_name, a.phone, a.email]));
+    const url = URL.createObjectURL(new Blob(['﻿' + rows.map((r) => r.map(q).join(',')).join('\r\n')], { type: 'text/csv' }));
+    const l = document.createElement('a'); l.href = url; l.download = 'LWH-ArcBest-dock-appointments-' + ym + '.csv'; document.body.appendChild(l); l.click(); l.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   }
 
   function vSearch() {
@@ -949,7 +1047,7 @@
     if (q.get('c') && q.get('k')) return openManage(q.get('c'), q.get('k'));
     if (q.get('c')) { const m = LS.get('mine', []).find((x) => x.c === q.get('c').toUpperCase()); if (m) return openManage(m.c, m.k); }
     const v = q.get('view');
-    if (teamMode()) return go(['board', 'search', 'blocks', 'settings'].includes(v) ? v : 'board');
+    if (teamMode()) return go(['board', 'calendar', 'search', 'blocks', 'settings'].includes(v) ? v : 'board');
     if (v === 'board' || v === 'team') return go('login');
     go(['book', 'mine', 'find'].includes(v) ? v : 'home');
   }
