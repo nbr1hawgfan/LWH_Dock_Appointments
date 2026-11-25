@@ -15,6 +15,9 @@
 const SB_URL = 'https://tjivcqxnkftujceumdtx.supabase.co';
 const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqaXZjcXhua2Z0dWpjZXVtZHR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4OTE5NDMsImV4cCI6MjEwMDQ2Nzk0M30.GzDc-_u92jvAHq7eG1X-1cet5Av9qF3ZDEVJMRKEP0E';
 const FROM_NAME = 'Logistics Warehouse Dock Scheduling';
+// Shared Google Calendar that mirrors every appointment (the script's account needs "Make changes to events").
+const CAL_ID = 'c_9d6e701ea3c5be07a1e615b0974baf1d13e78f3c40ff22d99bf3b51a1525468c@group.calendar.google.com';
+const SITE_ADDRESS = '8501 State Hwy 45, Fort Smith, AR 72916';
 const KEY_FOR_SETUP = 'PASTE_MAILER_KEY_HERE';
 
 const NAVY = '#003399', DARK = '#0B1A33', BLUE = '#166AB2', AMBER = '#A85F00', GREEN = '#1E7B3C', RED = '#9E0E26';
@@ -46,7 +49,15 @@ function processOutbox() {
     if (!res.ok) throw new Error(res.message || res.error);
     const replyTo = String(res.reply_to || '').split(',')[0].trim();
     const results = [];
+    const synced = {};
     (res.items || []).forEach(function (it) {
+      // Calendar: mirror the appointment's current state once per run (never blocks the email)
+      var calErr = null;
+      if (it.appt && !synced[it.appt.id]) {
+        synced[it.appt.id] = true;
+        try { syncCal_(it.appt, key); } catch (e) { calErr = 'calendar: ' + (e && e.message || e); }
+      }
+      if (it.kind === 'cal') { results.push(calErr ? { id: it.id, ok: false, error: calErr } : { id: it.id, ok: true }); return; }
       try {
         const m = build_(it.kind, it.payload);
         const opts = { name: FROM_NAME, htmlBody: m.html };
@@ -62,6 +73,34 @@ function processOutbox() {
   } finally {
     lock.releaseLock();
   }
+}
+
+// ---------------------------------------------------------------- shared calendar
+var STATUS_ = { BOOKED: '', ARRIVED: 'Checked in', AT_DOOR: 'At door', DONE: 'Done', NO_SHOW: 'NO-SHOW', CANCELLED: 'Cancelled' };
+function syncCal_(a, key) {
+  if (!CAL_ID) return;
+  const cal = CalendarApp.getCalendarById(CAL_ID);
+  if (!cal) throw new Error('Cannot open the shared calendar. Share it with this account with "Make changes to events".');
+  var ev = a.cal_event_id ? cal.getEventById(a.cal_event_id) : null;
+  if (a.status === 'CANCELLED') {
+    if (ev) ev.deleteEvent();
+    if (a.cal_event_id) rpc_('appt_gas_set_event', { p_key: key, p_id: a.id, p_event: '' });
+    return;
+  }
+  var st = new Date(a.start_at), en = new Date(st.getTime() + (a.slot_minutes || 30) * 60000);
+  var title = (a.direction === 'IN' ? 'IN' : 'OUT') + ' · ' + a.carrier_name + ' · ' + a.ref_no +
+    (a.door ? ' · Door ' + a.door : '') + (STATUS_[a.status] ? ' [' + STATUS_[a.status] + ']' : '');
+  var desc = [dirName_(a.direction) + ' appointment ' + a.conf_no, 'PO/BOL: ' + a.ref_no, 'Trailer: ' + a.trailer_type + (a.trailer_no ? ' #' + a.trailer_no : ''),
+    'Carrier: ' + a.carrier_name + (a.scac ? ' (' + a.scac + ')' : ''), 'Contact: ' + a.contact_name + (a.phone ? ' · ' + a.phone : ''),
+    a.email ? 'Email: ' + a.email : '', a.notes ? 'Carrier notes: ' + a.notes : '', a.team_notes ? 'Team notes: ' + a.team_notes : '',
+    'Booked by: ' + (a.booked_by === 'carrier' ? 'carrier online' : a.booked_by)].filter(String).join('\n');
+  if (!ev) {
+    ev = cal.createEvent(title, st, en, { location: SITE_ADDRESS, description: desc });
+    rpc_('appt_gas_set_event', { p_key: key, p_id: a.id, p_event: ev.getId() });
+  } else {
+    ev.setTitle(title); ev.setTime(st, en); ev.setDescription(desc); ev.setLocation(SITE_ADDRESS);
+  }
+  try { ev.setColor(a.status === 'NO_SHOW' ? CalendarApp.EventColor.GRAY : a.direction === 'IN' ? CalendarApp.EventColor.BLUE : CalendarApp.EventColor.ORANGE); } catch (e) { /* color is optional */ }
 }
 
 // ---------------------------------------------------------------- formatting

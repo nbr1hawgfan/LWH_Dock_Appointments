@@ -10,7 +10,7 @@ Static PWA on GitHub Pages · data in Supabase (LWH Companion project, `appt_*`)
 | PWA (`index.html`, `assets/`) | GitHub Pages → `schedule.logisticswarehouse.net` | Carrier booking / reschedule / cancel; LWH team dock board |
 | Supabase RPCs `appt_*` | LWH Companion | All rules: slot length, capacity, dock hours, blocks, double-booking lock |
 | `appt_outbox` table | LWH Companion | Every email to send (confirm, reschedule, cancel, reminder, team notices, 6 AM schedule) |
-| `gas/Code.gs` | Apps Script | Runs every minute, sends whatever is in the outbox, marks it sent |
+| `gas/Code.gs` | Apps Script | Runs every minute, sends whatever is in the outbox, marks it sent, and mirrors every appointment onto the shared Google Calendar (new, moved, door/status, cancelled = removed) |
 | `appt-push` edge function | LWH Companion | Web push to team (new / changed / cancelled / late) and carriers (2-hour reminder, door assigned, moved by LWH) |
 | `appt-tick` pg_cron job | LWH Companion | Every 10 min: 24-hour reminder emails, 2-hour push reminders, late alerts, 6 AM daily schedule |
 
@@ -33,3 +33,4 @@ Edit the four variables at the top of `assets/css/app.css` (`--red` = main band,
 1. script.google.com → New project → paste `gas/Code.gs`.
 2. Put the mailer key (ask Tim / Supabase `appt_settings.gas_key`) in `KEY_FOR_SETUP`, run `setup()`, approve permissions.
 3. Emails send from the account that owns the script, within a minute of each booking.
+4. The script's account needs **Make changes to events** on the shared dock calendar (`CAL_ID` in Code.gs).
