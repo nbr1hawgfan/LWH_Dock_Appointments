@@ -2,7 +2,7 @@
    Data: Supabase (LWH Companion project, appt_* RPCs). Email: GAS mailer reads appt_outbox. */
 (() => {
   'use strict';
-  const VERSION = '1.0.5';
+  const VERSION = '1.0.6';
   const SB = 'https://tjivcqxnkftujceumdtx.supabase.co';
   const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqaXZjcXhua2Z0dWpjZXVtZHR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4OTE5NDMsImV4cCI6MjEwMDQ2Nzk0M30.GzDc-_u92jvAHq7eG1X-1cet5Av9qF3ZDEVJMRKEP0E';
   const WX = { lat: 35.333, lon: -94.300, name: 'Fort Smith' };
@@ -157,7 +157,8 @@
     const c = S.cfg;
     const mine = LS.get('mine', []).filter((x) => x.date >= ctNow().date).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
     const hrs = c.hours.filter((h) => h.is_open);
-    const hrsTxt = hrs.length ? (DOW[hrs[0].dow] + '–' + DOW[hrs[hrs.length - 1].dow] + ' · ' + fmtT(hrs[0].open) + ' – ' + fmtT(hrs[0].close)) : '';
+    const brTxt = (c.breaks || []).map((b) => 'closed ' + fmtT(b.start) + ' – ' + fmtT(b.end) + (b.label ? ' for ' + b.label.toLowerCase() : '')).join(', ');
+    const hrsTxt = hrs.length ? (DOW[hrs[0].dow] + '–' + DOW[hrs[hrs.length - 1].dow] + ' · ' + fmtT(hrs[0].open) + ' – ' + fmtT(hrs[0].close) + (brTxt ? ' · ' + brTxt : '')) : '';
     app().innerHTML =
       '<div class="hero"><h1>Schedule a dock appointment</h1>' +
       '<p>Book, change or cancel your pickup or delivery in about a minute. You\'ll get a confirmation by email.</p>' +
@@ -229,7 +230,7 @@
       const dd = pd(d.date), cls = !d.open ? 'closed' : d.open_count ? '' : 'none';
       return '<button type="button" class="day-btn ' + cls + (d.date === b.date ? ' on' : '') + '" data-d="' + d.date + '"' + (!d.open ? ' disabled' : '') + '>' +
         '<div class="dw">' + (d.date === S.cfg.today ? 'Today' : DOW[dd.getDay()]) + '</div><div class="dn">' + dd.getDate() + '</div><div class="dm">' + MON[dd.getMonth()] + '</div>' +
-        '<div class="dc">' + (!d.open ? 'Closed' : d.open_count ? d.open_count + ' open' : 'Full') + '</div></button>';
+        '<div class="dc">' + (!d.open ? 'Closed' : d.open_count ? d.open_count + ' open' : (d.slots.length && d.slots.every((x) => x.why === 'past')) ? '—' : 'Full') + '</div></button>';
     }).join('') + (b.loadedTo < max ? '<button type="button" class="day-btn" id="moreDays"><div class="dw">More</div><div class="dn">›</div><div class="dm">dates</div></button>' : '');
     $$('.day-btn[data-d]').forEach((x) => x.onclick = () => { b.date = x.dataset.d; b.slot = null; renderDays(); renderSlots(); });
     const m = $('#moreDays');
@@ -238,13 +239,13 @@
   }
   function renderSlots() {
     const b = S.book, d = b.days.find((x) => x.date === b.date);
-    const why = { full: 'Booked', blocked: 'Unavailable', too_soon: 'Too soon', past: 'Passed', too_far: '' };
+    const why = { full: 'Booked', blocked: 'Unavailable', too_soon: 'Too soon', past: 'Passed', too_far: '', day_full: 'Day full', break: 'Break' };
     if (!d || !d.open) { $('#slots').innerHTML = '<div class="empty"><div class="e">🚫</div>The dock is closed this day.</div>'; $('#pickSum').innerHTML = ''; return; }
     $('#slots').innerHTML = '<div class="lbl-sm" style="margin-top:16px">' + esc(fmtD(d.date, true)) + ' · ' + b.interval + '-minute appointments</div>' +
       '<div class="slots" style="margin-top:8px">' + d.slots.map((s) => s.ok
         ? '<button type="button" class="slot' + (b.slot && b.slot.start === s.start ? ' on' : '') + '" data-s="' + esc(s.start) + '" data-t="' + s.t + '">' + fmtT(s.t) + '</button>'
         : '<button type="button" class="slot no" disabled>' + fmtT(s.t) + '<small>' + (why[s.why] || 'Unavailable') + '</small></button>').join('') + '</div>' +
-      (d.open_count ? '' : '<div class="note warn" style="margin-top:12px">No open times this day. Try another date.</div>');
+      (d.open_count ? '' : '<div class="note warn" style="margin-top:12px">' + (d.slots.some((x) => x.why === 'day_full') ? 'This day is fully booked. Please pick another date.' : 'No open times this day. Try another date.') + '</div>');
     $$('.slot[data-s]').forEach((x) => x.onclick = () => { b.slot = { start: x.dataset.s, t: x.dataset.t, date: b.date }; renderSlots(); });
     renderPickSum();
   }
@@ -596,16 +597,16 @@
     const live = day.filter((a) => a.status !== 'CANCELLED');
     const cnt = (f) => live.filter(f).length;
     $('#tiles').innerHTML =
-      tile('Inbound', cnt((a) => a.direction === 'IN'), cnt((a) => a.direction === 'IN' && a.status === 'DONE') + ' done') +
-      tile('Outbound', cnt((a) => a.direction === 'OUT'), cnt((a) => a.direction === 'OUT' && a.status === 'DONE') + ' done') +
+      tile('Inbound', cnt((a) => a.direction === 'IN') + (st.daily_max_in ? '<small style="font-size:.5em;color:var(--muted)"> / ' + st.daily_max_in + '</small>' : ''), cnt((a) => a.direction === 'IN' && a.status === 'DONE') + ' done') +
+      tile('Outbound', cnt((a) => a.direction === 'OUT') + (st.daily_max_out ? '<small style="font-size:.5em;color:var(--muted)"> / ' + st.daily_max_out + '</small>' : ''), cnt((a) => a.direction === 'OUT' && a.status === 'DONE') + ' done') +
       tile('On site', cnt((a) => a.status === 'ARRIVED' || a.status === 'AT_DOOR'), cnt((a) => a.status === 'AT_DOOR') + ' at a door', 'amber') +
       tile('No-shows', cnt((a) => a.status === 'NO_SHOW'), day.filter((a) => a.status === 'CANCELLED').length + ' cancelled', 'dark');
 
     const h = st.hours.find((x) => x.dow === pd(d).getDay());
     const blocks = R.blocks.filter((b) => b.date === d);
     const shown = S.team.showCancelled ? day : live;
-    const times = [];
-    if (h && h.is_open) for (let m = toMin(h.open); m + iv <= toMin(h.close); m += iv) times.push(m);
+    const times = (h && h.is_open) ? daySlots(st, h) : [];
+    const brks = (st.breaks || []).map((b) => ({ s: toMin(b.start), e: toMin(b.end), label: b.label || 'Break' }));
     // appointments outside the grid (old interval / forced / weekend) still get a row
     shown.forEach((a) => { const m = toMin(a.local_time); if (!times.some((t) => m >= t && m < t + iv)) times.push(m); });
     times.sort((x, y) => x - y);
@@ -624,10 +625,29 @@
         (!blk && free > 0 && canEdit() ? '<button type="button" class="open-slot" data-dir="' + dir + '" data-t="' + fromMin(m) + '">+ Open' + (free > 1 ? ' (' + free + ')' : '') + '</button>' : '') + '</div>';
     };
     $('#lanes').innerHTML = '<div class="lanes"><div class="lh">Time</div><div class="lh in">Inbound</div><div class="lh out">Outbound</div>' +
-      times.map((m) => '<div class="tm' + (m === nowRow ? ' now' : '') + '">' + fmtT(fromMin(m)).replace(' ', '&nbsp;') + '</div>' + cell('IN', m) + cell('OUT', m)).join('') + '</div>' + blockListHtml(blocks);
+      rowsWithBreaks(times, brks, h).map((r) => r.brk
+        ? '<div class="tm brk">' + fmtT(fromMin(r.brk.s)).replace(' ', '&nbsp;') + '</div><div class="cell brk-row" style="grid-column:span 2">' + esc(r.brk.label) + ' · ' + fmtT(fromMin(r.brk.s)) + ' – ' + fmtT(fromMin(r.brk.e)) + '</div>'
+        : '<div class="tm' + (r.m === nowRow ? ' now' : '') + '">' + fmtT(fromMin(r.m)).replace(' ', '&nbsp;') + '</div>' + cell('IN', r.m) + cell('OUT', r.m)).join('') + '</div>' + blockListHtml(blocks);
     $$('#lanes .bk').forEach((b) => b.onclick = () => apptModal(Number(b.dataset.id)));
     $$('#lanes .open-slot').forEach((b) => b.onclick = () => teamBookModal({ date: d, dir: b.dataset.dir, t: b.dataset.t }));
     $$('#lanes [data-unblock]').forEach((b) => b.onclick = () => delBlock(Number(b.dataset.unblock)));
+  }
+  // slot grid for a day: a break splits the day and the grid restarts when it ends (matches appt_day_slots in Supabase)
+  function daySlots(st, h) {
+    const iv = st.interval_min, br = (st.breaks || []).map((b) => [toMin(b.start), toMin(b.end)]), out = [];
+    let t = toMin(h.open), n = 0;
+    const close = toMin(h.close);
+    while (t + iv <= close && n++ < 300) {
+      const b = br.find((x) => t < x[1] && t + iv > x[0] && x[1] > t);
+      if (b) { t = b[1]; continue; }
+      out.push(t); t += iv;
+    }
+    return out;
+  }
+  function rowsWithBreaks(times, brks, h) {
+    const rows = times.map((m) => ({ m }));
+    if (h && h.is_open) brks.filter((b) => b.s >= toMin(h.open) && b.s < toMin(h.close)).forEach((b) => rows.push({ m: b.s - 0.5, brk: b }));
+    return rows.sort((a, b) => a.m - b.m);
   }
   function tile(k, v, h, cls) { return '<div class="tile ' + (cls || '') + '"><div class="k">' + esc(k) + '</div><div class="v">' + v + '</div><div class="h">' + esc(h) + '</div></div>'; }
   function blockListHtml(blocks) {
@@ -700,7 +720,7 @@
     const r = await rpc('appt_availability', { p_dir: dir, p_from: date, p_days: 1, p_exclude_conf: excludeConf || null, p_admin_token: S.team.token });
     const d = r.days && r.days[0];
     if (!d || !d.open || !d.slots.length) return '<option value="">Dock closed this day</option>';
-    const why = { full: 'FULL', blocked: 'BLOCKED', past: 'PAST' };
+    const why = { full: 'FULL', blocked: 'BLOCKED', past: 'PAST', day_full: 'DAY FULL' };
     return d.slots.map((s) => '<option value="' + esc(s.start) + '"' + (s.t === cur ? ' selected' : '') + '>' + fmtT(s.t) + (s.ok ? '' : ' — ' + (why[s.why] || s.why)) + '</option>').join('');
   }
   async function teamMoveModal(a) {
@@ -829,6 +849,10 @@
       '<div class="hint">30 = on the hour and half hour · 20 = three per hour · 15 = four per hour. Existing appointments keep their times.</div></div>' +
       '<div class="row-2">' + num('cap_in', 'Inbound trucks per slot', s.cap_in, 'Doors in use at once', 0, 20) + num('cap_out', 'Outbound trucks per slot', s.cap_out, '', 0, 20) + '</div>' +
       '<div class="row-2">' + num('lead_hours', 'Minimum notice (hours)', s.lead_hours, 'How soon carriers can book', 0, 168) + num('change_cutoff_hours', 'Change cutoff (hours)', s.change_cutoff_hours, 'No online changes inside this', 0, 168) + '</div>' +
+      '<div class="row-2">' + num('daily_max_in', 'Max inbound per day', s.daily_max_in, '0 = no daily limit', 0, 500) + num('daily_max_out', 'Max outbound per day', s.daily_max_out, '0 = no daily limit', 0, 500) + '</div>' +
+      num('daily_max_total', 'Max total per day (in + out)', s.daily_max_total, '0 = no limit. Use if one crew works both.', 0, 1000) +
+      '<div class="field"><label>Daily breaks (no appointments)</label><input class="input" name="breaks_txt" value="' + esc((s.breaks || []).map((b) => b.start + '-' + b.end + (b.label ? ' ' + b.label : '')).join(', ')) + '" placeholder="11:00-11:30 Lunch"' + dis + '>' +
+      '<div class="hint">Every open day, both directions. Separate several with commas, e.g. 11:00-11:30 Lunch, 14:00-14:15 Break. Times restart right after a break.</div></div>' +
       num('max_days_ahead', 'Book up to (days ahead)', s.max_days_ahead, '', 1, 180) +
       '<div class="row-2"><div class="field"><label>Inbound doors</label><input class="input" name="doors_in" value="' + esc(s.doors_in) + '"' + dis + '></div><div class="field"><label>Outbound doors</label><input class="input" name="doors_out" value="' + esc(s.doors_out) + '"' + dis + '></div></div>' +
       '</div></div>' +
@@ -868,6 +892,15 @@
       e.preventDefault();
       const p = Object.fromEntries(new FormData($('#fSet')).entries());
       p.interval_min = iv;
+      const bt = String(p.breaks_txt || '').trim(); delete p.breaks_txt;
+      p.breaks = [];
+      for (const part of bt ? bt.split(',') : []) {
+        const m = part.trim().match(/^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*(.*)$/);
+        if (!m) { toast('Break "' + part.trim() + '" should look like 11:00-11:30 Lunch', true); return; }
+        const a = m[1].padStart(2, '0') + ':' + m[2], b = m[3].padStart(2, '0') + ':' + m[4];
+        if (b <= a) { toast('Break end must be after start: ' + part.trim(), true); return; }
+        p.breaks.push({ start: a, end: b, label: m[5].trim() });
+      }
       p.hours = $$('.hours-row').map((r) => ({ dow: Number(r.dataset.dow), is_open: $('.hOpen', r).checked, open: $('.hFrom', r).value, close: $('.hTo', r).value }));
       if (iv !== s.interval_min && !confirm('Change appointment length from ' + s.interval_min + ' to ' + iv + ' minutes? New bookings use the new length right away.')) return;
       busy(true, 'Saving…');
