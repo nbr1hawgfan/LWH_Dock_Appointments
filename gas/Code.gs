@@ -165,7 +165,7 @@ function details_(p) {
   return rows_([['PO / BOL', p.ref_no], ['Trailer', p.trailer_type + (p.trailer_no ? ' #' + p.trailer_no : '')], ['Carrier', p.carrier_name + (p.scac ? ' (' + p.scac + ')' : '')],
     ['Contact', p.contact_name], ['Phone', p.phone], ['Email', p.email], ['Notes', p.notes], ['Location', p.site_address]]);
 }
-function mapsUrl_(a) { return 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(a); }
+function mapsUrl_(p) { return 'https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=' + encodeURIComponent(p.map_q || p.site_address); }
 function textOf_(p, lead) {
   return lead + '\n\nConfirmation: ' + p.conf_no + '\n' + dirName_(p.direction) + ' - ' + p.pretty_date + ' at ' + p.pretty_time +
     '\nPO/BOL: ' + p.ref_no + '\nTrailer: ' + p.trailer_type + '\nCarrier: ' + p.carrier_name + '\nLocation: ' + p.site_address +
@@ -187,7 +187,7 @@ function build_(kind, p) {
   var color = p.direction === 'OUT' ? AMBER : BLUE;
   var arrive = '<p style="margin:14px 0 0;padding:12px 14px;background:#E8F0FA;border-left:4px solid ' + BLUE + ';font-size:15px;"><b>When you arrive:</b> ' + esc_(p.instructions) + '</p>';
   var manage = button_('Reschedule or cancel', p.manage_url) +
-    '<p style="font-size:14px;color:#4A4A4A;margin:0;"><a href="' + mapsUrl_(p.site_address) + '" style="color:' + BLUE + ';">Directions to ' + esc_(p.site_address) + '</a></p>';
+    '<p style="font-size:14px;color:#4A4A4A;margin:0;"><a href="' + mapsUrl_(p) + '" style="color:' + BLUE + ';">Directions to ' + esc_(p.site_address) + '</a></p>';
   var board = baseUrl_(p) + '?view=board';
   var by = p.booked_by && p.booked_by !== 'carrier' ? ' (booked by ' + p.booked_by + ')' : ' (booked online)';
 

@@ -1,6 +1,6 @@
 /* LWH Dock Appointments service worker: app-shell cache + push notifications. */
-const CACHE = 'lwh-appt-v1.0.0';
-const SHELL = ['./', 'index.html', 'assets/css/theme.css?v=1.0.0', 'assets/css/app.css?v=1.0.0', 'assets/js/app.js?v=1.0.0',
+const CACHE = 'lwh-appt-v1.0.1';
+const SHELL = ['./', 'index.html', 'assets/css/theme.css?v=1.0.1', 'assets/css/app.css?v=1.0.1', 'assets/js/app.js?v=1.0.1',
   'assets/img/logo.png', 'assets/icons/appt-192.png', 'assets/icons/appt-favicon.png', 'manifest.webmanifest',
   'assets/fonts/oswald-latin-500-normal.woff2', 'assets/fonts/oswald-latin-600-normal.woff2', 'assets/fonts/oswald-latin-700-normal.woff2',
   'assets/fonts/inter-latin-400-normal.woff2', 'assets/fonts/inter-latin-600-normal.woff2', 'assets/fonts/inter-latin-700-normal.woff2'];

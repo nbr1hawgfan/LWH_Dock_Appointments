@@ -2,7 +2,7 @@
    Data: Supabase (LWH Companion project, appt_* RPCs). Email: GAS mailer reads appt_outbox. */
 (() => {
   'use strict';
-  const VERSION = '1.0.0';
+  const VERSION = '1.0.1';
   const SB = 'https://tjivcqxnkftujceumdtx.supabase.co';
   const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqaXZjcXhua2Z0dWpjZXVtZHR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4OTE5NDMsImV4cCI6MjEwMDQ2Nzk0M30.GzDc-_u92jvAHq7eG1X-1cet5Av9qF3ZDEVJMRKEP0E';
   const WX = { lat: 35.333, lon: -94.300, name: 'Fort Smith' };
@@ -33,7 +33,12 @@
   const fmtPhone = (v) => { const d = String(v).replace(/\D/g, '').replace(/^1(?=\d{10})/, '').slice(0, 10); if (d.length < 4) return d; if (d.length < 7) return '(' + d.slice(0, 3) + ') ' + d.slice(3); return '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6); };
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-  const mapsUrl = (addr) => 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(addr);
+  // Pinned to the building's coordinates (Google doesn't list 8501 State Hwy 45 under our name)
+  const mapQ = () => (S.cfg && S.cfg.map_q) || (S.cfg && S.cfg.site_address) || '';
+  const mapsUrl = () => 'https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=' + encodeURIComponent(mapQ());
+  const mapView = () => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(mapQ());
+  const mapEmbed = (h) => '<div class="map-box"><iframe title="Map to ' + esc(S.cfg.site_address) + '" loading="lazy" referrerpolicy="no-referrer-when-downgrade" style="height:' + (h || 220) + 'px" src="https://maps.google.com/maps?q=' + encodeURIComponent(mapQ()) + '&z=15&output=embed"></iframe>' +
+    '<div class="map-links"><a href="' + mapsUrl() + '" target="_blank" rel="noopener">Get directions</a><a href="' + mapView() + '" target="_blank" rel="noopener">Open in Google Maps</a></div></div>';
 
   function toast(msg, err) {
     const t = document.createElement('div');
@@ -152,8 +157,8 @@
     app().innerHTML =
       '<div class="hero"><h1>Schedule a dock appointment</h1>' +
       '<p>Book, change or cancel your pickup or delivery in about a minute. You\'ll get a confirmation by email.</p>' +
-      '<div class="addr">📍 ' + esc(c.site_address) + ' <a href="' + mapsUrl(c.site_address) + '" target="_blank" rel="noopener">Directions</a></div>' +
-      (hrsTxt ? '<div class="hint" style="margin-top:4px">Dock hours: ' + esc(hrsTxt) + '</div>' : '') + '</div>' +
+      '<div class="addr">📍 ' + esc(c.site_address) + '</div>' +
+      (hrsTxt ? '<div class="hint" style="margin-top:4px">Dock hours: ' + esc(hrsTxt) + '</div>' : '') + mapEmbed(200) + '</div>' +
       '<div class="dir-pick">' +
       '<button class="dir-btn" type="button" data-d="IN"><span class="tag">Delivering to us</span><b>Inbound</b><span>Drop off / unload at our dock</span></button>' +
       '<button class="dir-btn out" type="button" data-d="OUT"><span class="tag">Picking up from us</span><b>Outbound</b><span>Pick up / load at our dock</span></button></div>' +
@@ -349,8 +354,9 @@
       '<div class="hint" style="margin-top:6px">A confirmation was sent to <b>' + esc(a.email) + '</b>. Use the link in it to reschedule or cancel.</div>' +
       apptDetailsHtml(a) +
       '<div class="note" style="text-align:left;margin-top:16px"><b>When you arrive:</b> ' + esc(S.cfg.instructions) + '</div>' +
+      '<div style="text-align:left;margin-top:14px">' + mapEmbed(220) + '</div>' +
       '<div class="btn-row"><button class="btn btn-red" type="button" id="ics">Add to calendar</button>' +
-      '<a class="btn btn-ghost" href="' + mapsUrl(S.cfg.site_address) + '" target="_blank" rel="noopener">Directions</a>' +
+      '<a class="btn btn-ghost" href="' + mapsUrl() + '" target="_blank" rel="noopener">Directions</a>' +
       '<button class="btn btn-ghost" type="button" id="notif">Get notifications</button></div>' +
       '<div class="btn-row"><button class="btn btn-black" type="button" id="another">Book another</button><button class="btn btn-ghost" type="button" id="manage">Manage this appointment</button></div></div>';
     $('#ics').onclick = () => downloadIcs(a);
@@ -438,7 +444,8 @@
       apptDetailsHtml(a) +
       (M.can_change ? '<div class="btn-row" style="margin-top:18px"><button class="btn btn-red" type="button" id="mRes">Reschedule</button><button class="btn btn-ghost" type="button" id="mCan" style="color:#9E0E26">Cancel appointment</button></div>'
         : (a.status === 'BOOKED' ? '<div class="note warn" style="margin-top:16px">This appointment is too close to change online. Please call the office.</div>' : '')) +
-      (a.status !== 'CANCELLED' ? '<div class="btn-row" style="margin-top:10px"><button class="btn btn-ghost" type="button" id="mIcs">Add to calendar</button><a class="btn btn-ghost" href="' + mapsUrl(S.cfg.site_address) + '" target="_blank" rel="noopener">Directions</a><button class="btn btn-ghost" type="button" id="mNot">Get notifications</button></div>' : '') +
+      (a.status !== 'CANCELLED' ? '<div class="btn-row" style="margin-top:10px"><button class="btn btn-ghost" type="button" id="mIcs">Add to calendar</button><a class="btn btn-ghost" href="' + mapsUrl() + '" target="_blank" rel="noopener">Directions</a><button class="btn btn-ghost" type="button" id="mNot">Get notifications</button></div>' : '') +
+      (a.status !== 'CANCELLED' ? '<div style="margin-top:16px">' + mapEmbed(220) + '</div>' : '') +
       '</div></div>';
     const rs = $('#mRes'); if (rs) rs.onclick = () => startBook(a.direction, { c: a.conf_no, k: M.token });
     const cn = $('#mCan'); if (cn) cn.onclick = () => confirmCancel(a, M.token);
@@ -830,7 +837,10 @@
       '<div class="field"><label>ArcBest emails</label><textarea class="input" name="customer_emails" rows="2"' + dis + '>' + esc(s.customer_emails) + '</textarea><div class="hint">Optional. Get the same team emails.</div></div></div></div>' +
       '<div class="card"><div class="card-head"><h2>Carrier info</h2></div><div class="card-body">' +
       '<div class="field"><label>Site address</label><input class="input" name="site_address" value="' + esc(s.site_address) + '"' + dis + '></div>' +
-      '<div class="field"><label>Arrival instructions</label><textarea class="input" name="instructions" rows="3"' + dis + '>' + esc(s.instructions) + '</textarea></div>' +
+      '<div class="row-2"><div class="field"><label>Map pin latitude</label><input class="input" name="site_lat" value="' + esc(s.site_lat) + '"' + dis + '></div>' +
+      '<div class="field"><label>Map pin longitude</label><input class="input" name="site_lng" value="' + esc(s.site_lng) + '"' + dis + '></div></div>' +
+      '<div class="hint" style="margin:-6px 0 12px">Where map and directions links point. In Google Maps, right-click the dock entrance to copy its coordinates.</div>' +
+            '<div class="field"><label>Arrival instructions</label><textarea class="input" name="instructions" rows="3"' + dis + '>' + esc(s.instructions) + '</textarea></div>' +
       '<div class="field"><label>App link (used in emails)</label><input class="input" name="app_url" value="' + esc(s.app_url) + '"' + dis + '></div></div></div>' +
       '</div>' + (ed ? '<button class="btn btn-red" type="submit" style="margin-bottom:20px">Save settings</button>' : '') + '</form>' +
       '<div class="grid grid-2"><div class="card"><div class="card-head"><h2>Team users</h2></div><div class="card-body flush" id="uList"></div>' +
