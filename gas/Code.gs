@@ -190,6 +190,7 @@ function ics_(p, cancel) {
 }
 
 // ---------------------------------------------------------------- WMS load list (5 AM + on demand)
+function shipTxt_(list) { return (list || []).map(function (s) { return [s.origin, s.model].filter(String).join(' / ') + ' x ' + s.qty; }).join(', '); }
 function wmsEmail_(p) {
   var items = p.items || [];
   var ins = items.filter(function (a) { return a.direction === 'IN'; }), outs = items.filter(function (a) { return a.direction === 'OUT'; });
@@ -197,14 +198,15 @@ function wmsEmail_(p) {
   var td = function (v, b) { return '<td style="padding:8px;border-bottom:1px solid #E2E2E2;font-family:Arial,Helvetica,sans-serif;font-size:15px;' + (b ? 'font-weight:bold;' : '') + '">' + esc_(v) + '</td>'; };
   var table = function (title, list, color) {
     return '<div style="font-family:Arial,Helvetica,sans-serif;font-size:17px;font-weight:bold;margin:18px 0 6px;color:' + color + ';">' + title + ' (' + list.length + ')</div>' +
-      (list.length ? '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #E2E2E2;"><tr>' + th('Time') + th('PO / BOL') + th('Carrier') + th('Trailer') + th('Conf #') + '</tr>' +
-        list.map(function (a) { return '<tr>' + td(fmtT_(a.local_time), true) + td(a.ref_no, true) + td(a.carrier_name + (a.scac ? ' (' + a.scac + ')' : '')) + td(a.trailer_type + (a.trailer_no ? ' #' + a.trailer_no : '')) + td(a.conf_no) + '</tr>'; }).join('') + '</table>'
+      (list.length ? '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #E2E2E2;"><tr>' + th('Time') + th('PO / BOL') + th('Origin / Model / Qty') + th('Carrier') + th('Trailer') + th('Conf #') + '</tr>' +
+        list.map(function (a) { return '<tr>' + td(fmtT_(a.local_time), true) + td(a.ref_no, true) + td(shipTxt_(a.ship) || 'No shipment info', !!shipTxt_(a.ship)) + td(a.carrier_name + (a.scac ? ' (' + a.scac + ')' : '')) + td(a.trailer_type + (a.trailer_no ? ' #' + a.trailer_no : '')) + td(a.conf_no) + '</tr>'; }).join('') + '</table>'
         : '<p style="margin:0;color:#767676;font-size:15px;">None booked.</p>');
   };
-  var csv = [['Date', 'Time', 'Direction', 'PO/BOL', 'Carrier', 'SCAC', 'Trailer type', 'Trailer #', 'Confirmation', 'Status', 'Notes']].concat(items.map(function (a) {
-    return [p.date, fmtT_(a.local_time), dirName_(a.direction), a.ref_no, a.carrier_name, a.scac, a.trailer_type, a.trailer_no, a.conf_no, a.status, a.notes];
+  var sj = function (a, k) { return (a.ship || []).map(function (s) { return s[k]; }).join('; '); };
+  var csv = [['Date', 'Time', 'Direction', 'PO/BOL', 'Origin', 'Model', 'Qty', 'ArcBest REF', 'Carrier', 'SCAC', 'Trailer type', 'Trailer #', 'Confirmation', 'Status', 'Notes']].concat(items.map(function (a) {
+    return [p.date, fmtT_(a.local_time), dirName_(a.direction), a.ref_no, sj(a, 'origin'), sj(a, 'model'), sj(a, 'qty'), sj(a, 'ext_ref'), a.carrier_name, a.scac, a.trailer_type, a.trailer_no, a.conf_no, a.status, a.notes];
   })).map(function (r) { return r.map(function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }).join(','); }).join('\r\n');
-  var text = 'Loads to build - ' + p.pretty_date + '\n\nINBOUND (' + ins.length + ')\n' + ins.map(function (a) { return fmtT_(a.local_time) + '  ' + a.ref_no + '  ' + a.carrier_name; }).join('\n') +
+  var text = 'Loads to build - ' + p.pretty_date + '\n\nINBOUND (' + ins.length + ')\n' + ins.map(function (a) { return fmtT_(a.local_time) + '  ' + a.ref_no + '  ' + (shipTxt_(a.ship) ? shipTxt_(a.ship) + '  ' : '') + a.carrier_name; }).join('\n') +
     '\n\nOUTBOUND (' + outs.length + ')\n' + outs.map(function (a) { return fmtT_(a.local_time) + '  ' + a.ref_no + '  ' + a.carrier_name; }).join('\n');
   return {
     subject: '[WMS] Loads to build - ' + p.pretty_date + ': ' + ins.length + ' inbound, ' + outs.length + ' outbound',

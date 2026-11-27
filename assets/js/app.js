@@ -2,7 +2,7 @@
    Data: Supabase (LWH Companion project, appt_* RPCs). Email: GAS mailer reads appt_outbox. */
 (() => {
   'use strict';
-  const VERSION = '1.2.0';
+  const VERSION = '1.3.0';
   const SB = 'https://tjivcqxnkftujceumdtx.supabase.co';
   const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqaXZjcXhua2Z0dWpjZXVtZHR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4OTE5NDMsImV4cCI6MjEwMDQ2Nzk0M30.GzDc-_u92jvAHq7eG1X-1cet5Av9qF3ZDEVJMRKEP0E';
   const WX = { lat: 35.333, lon: -94.300, name: 'Fort Smith' };
@@ -118,7 +118,7 @@
   function renderChrome() {
     const nav = $('#nav');
     const items = teamMode()
-      ? [['board', 'Dock Board'], ['calendar', 'Calendar'], ['tbook', 'Book'], ['search', 'Search'], ['blocks', 'Block Time'], ['settings', 'Settings']]
+      ? [['board', 'Dock Board'], ['calendar', 'Calendar'], ['shipments', 'Shipments'], ['tbook', 'Book'], ['search', 'Search'], ['blocks', 'Block Time'], ['settings', 'Settings']]
       : [['home', 'Home'], ['book', 'Book'], ['mine', 'My Appointments'], ['find', 'Find']];
     nav.innerHTML = items.map(([v, l]) => '<button type="button" data-v="' + v + '" class="' + (S.view === v || (v === 'book' && S.view === 'details') ? 'active' : '') + '">' + l + (v === 'mine' ? mineCount() : '') + '</button>').join('') +
       (teamMode() ? '<span class="spacer"></span><button type="button" class="logout" data-v="logout">Sign out</button>' : '');
@@ -145,7 +145,7 @@
     history.replaceState(null, '', u.pathname + u.search);
     renderChrome();
     window.scrollTo(0, 0);
-    const R = { home: vHome, book: vBook, details: vDetails, done: vDone, mine: vMine, find: vFind, manage: vManage, login: vLogin, board: vBoard, calendar: vCalendar, tbook: () => teamBookModal({}), search: vSearch, blocks: vBlocks, settings: vSettings }[v];
+    const R = { home: vHome, book: vBook, details: vDetails, done: vDone, mine: vMine, find: vFind, manage: vManage, login: vLogin, board: vBoard, calendar: vCalendar, shipments: vShipments, tbook: () => teamBookModal({}), search: vSearch, blocks: vBlocks, settings: vSettings }[v];
     if (v === 'tbook') { S.view = 'board'; renderChrome(); vBoard(); teamBookModal({}); return; }
     (R || vHome)();
   }
@@ -662,11 +662,12 @@
     const late = a.status === 'BOOKED' && d === now.date && now.min > toMin(a.local_time) + 30;
     return '<button type="button" class="bk ' + a.direction + ' ' + a.status + (late ? ' late' : '') + '" data-id="' + a.id + '">' +
       '<div class="c">' + esc(a.carrier_name) + '</div><div class="r">' + esc(a.ref_no) + ' · ' + esc(a.trailer_type) + (a.local_time.slice(3) !== '00' && a.local_time.slice(3) !== '30' ? ' · ' + fmtT(a.local_time) : '') + '</div>' +
+      (a.ship && a.ship.length ? '<div class="ship-line">' + esc(shipTxt(a.ship)) + '</div>' : '') +
       '<div class="m"><span class="st st-' + (late ? 'LATE' : a.status) + '">' + (late ? 'Late' : STATUS[a.status]) + '</span>' + (a.door ? '<span class="door">Door ' + esc(a.door) + '</span>' : '') + '</div></button>';
   }
 
   function findAppt(id) { return (S.team.data && S.team.data.appointments.find((a) => a.id === id)) || (S.team.cal && S.team.cal.appointments.find((a) => a.id === id)) || (S.team.search || []).find((a) => a.id === id); }
-  const refreshCurrent = (q) => (S.view === 'calendar' ? loadCal() : refreshBoard(q));
+  const refreshCurrent = (q) => (S.view === 'calendar' ? loadCal() : S.view === 'shipments' ? loadShipments() : refreshBoard(q));
   function doorOptions(dir, cur) {
     const st = S.team.data ? S.team.data.settings : null;
     const list = st ? String(dir === 'IN' ? st.doors_in : st.doors_out).split(',').map((x) => x.trim()).filter(Boolean) : [];
@@ -682,6 +683,8 @@
       '<div style="margin:6px 0 10px"><span class="st st-' + a.status + '">' + STATUS[a.status] + '</span> <span class="hint">Booked by ' + esc(a.booked_by === 'carrier' ? 'carrier online' : a.booked_by) + (a.reschedule_count ? ' · moved ' + a.reschedule_count + '×' : '') + '</span></div>' +
       '<dl class="kv"><dt>Carrier</dt><dd>' + esc(a.carrier_name) + (a.scac ? ' (' + esc(a.scac) + ')' : '') + '</dd><dt>PO / BOL</dt><dd><b>' + esc(a.ref_no) + '</b></dd><dt>Trailer</dt><dd>' + esc(a.trailer_type) + '</dd>' +
       '<dt>Contact</dt><dd>' + esc(a.contact_name) + (tel ? ' · ' + tel : '') + '</dd>' + (a.email ? '<dt>Email</dt><dd><a href="mailto:' + esc(a.email) + '">' + esc(a.email) + '</a></dd>' : '') +
+      (a.ship && a.ship.length ? '<dt>ArcBest shipment</dt><dd>' + a.ship.map((s) => '<b>' + esc(s.origin) + '</b> · ' + esc(s.model) + ' × ' + esc(s.qty) + (s.ext_ref ? ' <span class="hint">(REF ' + esc(s.ext_ref) + ')</span>' : '')).join('<br>') + '</dd>'
+        : '<dt>ArcBest shipment</dt><dd class="hint">No shipment info uploaded for this PO/BOL yet</dd>') +
       (a.notes ? '<dt>Carrier notes</dt><dd>' + esc(a.notes) + '</dd>' : '') + (a.cancel_reason && a.status === 'CANCELLED' ? '<dt>Cancel reason</dt><dd>' + esc(a.cancel_reason) + '</dd>' : '') +
       (a.arrived_at ? '<dt>Checked in</dt><dd>' + esc(fmtStamp(a.arrived_at)) + '</dd>' : '') + (a.done_at ? '<dt>Done</dt><dd>' + esc(fmtStamp(a.done_at)) + '</dd>' : '') + '</dl>' +
       (ed ? '<div class="row-2" style="margin-top:14px"><div class="field"><label>Door</label><select class="input" id="mDoor">' + doorOptions(a.direction, a.door) + '</select></div>' +
@@ -778,6 +781,111 @@
     };
   }
 
+  // ---------- ArcBest shipment file upload (Reference -> origin / model / qty) ----------
+  const shipTxt = (list) => (list || []).map((s) => [s.origin, s.model].filter(Boolean).join(' · ') + ' × ' + s.qty).join(', ');
+  let xlsxReady = null;
+  function loadXlsx() {
+    if (window.XLSX) return Promise.resolve();
+    if (!xlsxReady) xlsxReady = new Promise((ok, bad) => { const s = document.createElement('script'); s.src = 'assets/js/xlsx.full.min.js'; s.onload = ok; s.onerror = () => bad(new Error('Could not load the spreadsheet reader.')); document.head.appendChild(s); });
+    return xlsxReady;
+  }
+  // Reads ArcBest's sheet: DATE | REF | Reference | ORIGIN | Model | Quantity (header names matched loosely)
+  async function parseShipFile(file) {
+    await loadXlsx();
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+    const norm = (v) => String(v || '').trim().toLowerCase().replace(/[^a-z0-9#/]+/g, ' ').trim();
+    const hi = grid.findIndex((r) => r.some((c) => /reference|po|bol/.test(norm(c))) && r.some((c) => /model|origin|qty|quantity/.test(norm(c))));
+    if (hi < 0) throw new Error('Could not find the header row (looking for Reference, Origin, Model, Quantity).');
+    const H = grid[hi].map(norm);
+    const col = (test) => H.findIndex(test);
+    const c = {
+      ref_no: col((h) => /^reference|^po|^bol|po bol|load/.test(h)),
+      ext_ref: col((h) => h === 'ref' || h === 'ref #' || h === 'ref no'),
+      ship_date: col((h) => /^date|ship date/.test(h)),
+      origin: col((h) => /origin/.test(h)), model: col((h) => /model|item|part/.test(h)), qty: col((h) => /qty|quantity|units/.test(h)),
+    };
+    if (c.ref_no < 0) throw new Error('No Reference column found.');
+    const toDate = (v) => { if (v instanceof Date) return ds(v); const m = String(v).match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/); if (m) return (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + m[1].padStart(2, '0') + '-' + m[2].padStart(2, '0'); return /^\d{4}-\d{2}-\d{2}/.test(String(v)) ? String(v).slice(0, 10) : ''; };
+    return grid.slice(hi + 1).map((r) => ({
+      ref_no: String(r[c.ref_no] ?? '').trim(), ext_ref: c.ext_ref >= 0 ? String(r[c.ext_ref] ?? '').trim() : '',
+      ship_date: c.ship_date >= 0 ? toDate(r[c.ship_date]) : '', origin: c.origin >= 0 ? String(r[c.origin] ?? '').trim() : '',
+      model: c.model >= 0 ? String(r[c.model] ?? '').trim() : '', qty: c.qty >= 0 ? String(r[c.qty] ?? '').trim() : '',
+    })).filter((x) => x.ref_no);
+  }
+  async function vShipments() {
+    if (!S.team.shipFrom) { S.team.shipFrom = ctNow().date; S.team.shipTo = addDays(ctNow().date, 14); }
+    app().innerHTML = '<div class="page-head"><div><h1>ArcBest shipments</h1><p>Upload ArcBest\'s shipment sheet. Each line is matched to a booking by its Reference (PO/BOL) number, so the dock board, calendar and WMS email show origin, model and quantity.</p></div>' +
+      (canEdit() ? '<label class="btn btn-red" style="cursor:pointer">Upload sheet<input type="file" id="shFile" accept=".xlsx,.xls,.csv" hidden></label>' : '') + '</div>' +
+      '<div class="board-ctrl"><label class="lbl-sm" style="margin:0">From</label><input class="input" type="date" id="shFrom" value="' + S.team.shipFrom + '" style="width:auto;padding:7px 10px">' +
+      '<label class="lbl-sm" style="margin:0">To</label><input class="input" type="date" id="shTo" value="' + S.team.shipTo + '" style="width:auto;padding:7px 10px">' +
+      '<span style="flex:1"></span><label class="switch"><input type="checkbox" id="shOnly"' + (S.team.shipOnlyOpen ? ' checked' : '') + '> Only not booked yet</label></div>' +
+      '<div id="shBody"><div class="skel" style="height:200px"></div></div>';
+    const f = $('#shFile');
+    if (f) f.onchange = async () => { const file = f.files[0]; f.value = ''; if (file) uploadShipFile(file); };
+    $('#shFrom').onchange = (e) => { S.team.shipFrom = e.target.value; loadShipments(); };
+    $('#shTo').onchange = (e) => { S.team.shipTo = e.target.value; loadShipments(); };
+    $('#shOnly').onchange = (e) => { S.team.shipOnlyOpen = e.target.checked; renderShipments(); };
+    loadShipments();
+  }
+  async function loadShipments() {
+    try {
+      const r = await trpc('appt_admin_shipments', { p_from: S.team.shipFrom, p_to: S.team.shipTo });
+      if (!r.ok) { toast(r.message, true); return; }
+      S.team.ship = r; renderShipments();
+    } catch (e) { if (e.message !== 'signed_out') $('#shBody').innerHTML = '<div class="note bad">' + esc(e.message) + '</div>'; }
+  }
+  function renderShipments() {
+    const R = S.team.ship; if (!R || !$('#shBody')) return;
+    let list = R.shipments;
+    const matched = list.filter((s) => s.appt).length;
+    if (S.team.shipOnlyOpen) list = list.filter((s) => !s.appt);
+    const units = R.shipments.reduce((t, s) => t + Number(s.qty || 0), 0);
+    $('#shBody').innerHTML = '<div class="tiles">' + tile('Shipment lines', R.shipments.length, units + ' units') + tile('Booked', matched, 'matched to an appointment') +
+      tile('Not booked yet', R.shipments.length - matched, 'no carrier appointment', 'amber') + tile('Bookings missing info', R.missing.length, 'booked, no shipment line', 'dark') + '</div>' +
+      '<div class="card"><div class="card-head"><h2>Shipment lines</h2></div><div class="card-body flush" style="overflow-x:auto"><table class="tbl"><thead><tr><th>Date</th><th>Reference</th><th>REF</th><th>Origin</th><th>Model</th><th>Qty</th><th>Booking</th>' + (canEdit() ? '<th></th>' : '') + '</tr></thead><tbody>' +
+      (list.length ? list.map((s) => '<tr><td>' + esc(s.ship_date ? fmtD(s.ship_date) : '') + '</td><td><b>' + esc(s.ref_no) + '</b></td><td>' + esc(s.ext_ref) + '</td><td>' + esc(s.origin) + '</td><td>' + esc(s.model) + '</td><td>' + esc(s.qty) + '</td>' +
+        '<td>' + (s.appt ? '<a href="#" data-appt="' + s.appt.id + '">' + esc(fmtD(s.appt.local_date)) + ' ' + fmtT(s.appt.local_time) + '</a> <span class="hint">' + esc(s.appt.carrier_name) + '</span>' : '<span class="st st-NO_SHOW">Not booked</span>') + '</td>' +
+        (canEdit() ? '<td><button class="btn btn-ghost btn-sm" type="button" data-del="' + s.id + '">✕</button></td>' : '') + '</tr>').join('') : '<tr><td colspan="8" class="empty">No shipment lines in this range. Upload ArcBest\'s sheet.</td></tr>') + '</tbody></table></div></div>' +
+      (R.missing.length ? '<div class="card"><div class="card-head"><h2>Booked with no shipment info</h2></div><div class="card-body flush">' + R.missing.map((a) => '<div class="list-row cal-row" data-appt="' + a.id + '"><div class="ct">' + fmtT(a.local_time) + '</div><div class="grow"><div class="t">' + esc(a.ref_no) + ' · ' + esc(a.carrier_name) + '</div><div class="s">' + esc(fmtD(a.local_date)) + ' · ' + DIRNAME[a.direction] + ' · ' + esc(a.conf_no) + ' · check the PO/BOL the carrier typed</div></div></div>').join('') + '</div></div>' : '');
+    $$('#shBody [data-appt]').forEach((x) => x.onclick = async (e) => { e.preventDefault(); await openApptById(Number(x.dataset.appt)); });
+    $$('#shBody [data-del]').forEach((x) => x.onclick = async () => { if (!confirm('Delete this shipment line?')) return; const r = await trpc('appt_admin_ship_del', { p_ids: [Number(x.dataset.del)] }); if (r.ok) loadShipments(); else toast(r.message, true); });
+  }
+  async function openApptById(id) {
+    // load the appointment's day so the details window has the full record
+    const s = (S.team.ship.shipments.find((x) => x.appt && x.appt.id === id) || {}).appt || S.team.ship.missing.find((x) => x.id === id);
+    if (!s) return;
+    const r = await trpc('appt_admin_board', { p_from: s.local_date, p_to: s.local_date });
+    if (!r.ok) return;
+    S.team.cal = Object.assign(S.team.cal || {}, { appointments: r.appointments, settings: r.settings, blocks: r.blocks });
+    apptModal(id);
+  }
+  async function uploadShipFile(file) {
+    busy(true, 'Reading ' + file.name + '…');
+    let rows;
+    try { rows = await parseShipFile(file); } catch (e) { toast(e.message, true); return; } finally { busy(false); }
+    if (!rows.length) { toast('No shipment lines found in that file.', true); return; }
+    const dates = rows.map((r) => r.ship_date).filter(Boolean).sort();
+    const m = modal('Upload ' + file.name, '<p><b>' + rows.length + '</b> line' + (rows.length === 1 ? '' : 's') + (dates.length ? ' · ' + esc(fmtD(dates[0])) + (dates[dates.length - 1] !== dates[0] ? ' – ' + esc(fmtD(dates[dates.length - 1])) : '') : '') +
+      '. Lines already uploaded (same Reference and Model) are updated, not duplicated.</p>' +
+      '<div style="overflow-x:auto;margin-top:10px"><table class="tbl"><thead><tr><th>Date</th><th>Reference</th><th>REF</th><th>Origin</th><th>Model</th><th>Qty</th></tr></thead><tbody>' +
+      rows.slice(0, 8).map((r) => '<tr><td>' + esc(r.ship_date) + '</td><td><b>' + esc(r.ref_no) + '</b></td><td>' + esc(r.ext_ref) + '</td><td>' + esc(r.origin) + '</td><td>' + esc(r.model) + '</td><td>' + esc(r.qty) + '</td></tr>').join('') +
+      (rows.length > 8 ? '<tr><td colspan="6" class="hint">…and ' + (rows.length - 8) + ' more</td></tr>' : '') + '</tbody></table></div>',
+    '<button class="btn btn-ghost" type="button" id="upX">Cancel</button><button class="btn btn-red" type="button" id="upGo">Upload ' + rows.length + ' lines</button>', true);
+    $('#upX', m.el).onclick = m.close;
+    $('#upGo', m.el).onclick = async () => {
+      busy(true, 'Uploading…');
+      try {
+        const r = await trpc('appt_admin_import_shipments', { p_rows: rows, p_file: file.name });
+        if (!r.ok) { toast(r.message, true); return; }
+        m.close(); toast(r.added + ' added, ' + r.updated + ' updated' + (r.skipped ? ', ' + r.skipped + ' skipped' : '') + '.');
+        if (dates.length) { S.team.shipFrom = dates[0] < S.team.shipFrom ? dates[0] : S.team.shipFrom; if (dates[dates.length - 1] > S.team.shipTo) S.team.shipTo = dates[dates.length - 1]; }
+        vShipments();
+      } catch (e) { if (e.message !== 'signed_out') toast(e.message, true); } finally { busy(false); }
+    };
+  }
+
   // ---------- WMS load list email (any day, on demand) ----------
   function wmsModal(d) {
     const st = (S.team.data && S.team.data.settings) || (S.team.cal && S.team.cal.settings) || {};
@@ -869,7 +977,8 @@
     const blk = C.blocks.filter((b) => b.date === d);
     const row = (a) => '<div class="list-row cal-row' + (a.status === 'CANCELLED' ? ' cxl' : '') + '" data-id="' + a.id + '" role="button" tabindex="0">' +
       '<div class="ct">' + fmtT(a.local_time) + '</div><span class="dirtag ' + a.direction + '">' + (a.direction === 'IN' ? 'In' : 'Out') + '</span>' +
-      '<div class="grow"><div class="t">' + esc(a.carrier_name) + '</div><div class="s">PO/BOL <b>' + esc(a.ref_no) + '</b> · ' + esc(a.trailer_type) + ' · ' + esc(a.conf_no) + '</div></div>' +
+      '<div class="grow"><div class="t">' + esc(a.carrier_name) + '</div><div class="s">PO/BOL <b>' + esc(a.ref_no) + '</b> · ' + esc(a.trailer_type) + ' · ' + esc(a.conf_no) + '</div>' +
+      (a.ship && a.ship.length ? '<div class="ship-line">' + esc(shipTxt(a.ship)) + '</div>' : '<div class="ship-line none">No shipment info yet</div>') + '</div>' +
       '<div class="chips-r">' + (a.door ? '<span class="door-chip">Door ' + esc(a.door) + '</span>' : '') + '<span class="st st-' + a.status + '">' + STATUS[a.status] + '</span></div></div>';
     el.innerHTML = '<div class="card" style="margin-top:16px"><div class="card-head"><h2>' + esc(fmtD(d, true)) + ' · ' + ni + ' in · ' + (live.length - ni) + ' out</h2>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" type="button" id="cdWms">Email WMS list</button><button class="btn btn-ghost btn-sm" type="button" id="cdBoard">Open dock board</button>' + (canEdit() ? '<button class="btn btn-red btn-sm" type="button" id="cdBook">+ Book</button>' : '') + '</div></div>' +
@@ -884,9 +993,10 @@
     const C = S.team.cal; if (!C) return;
     const ym = S.team.calMonth;
     const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-    const rows = [['Date', 'Time', 'Direction', 'Confirmation', 'PO/BOL', 'Carrier', 'SCAC', 'Trailer type', 'Trailer #', 'Status', 'Door', 'Checked in', 'At door', 'Done', 'Booked by', 'Contact', 'Phone', 'Email']];
+    const rows = [['Date', 'Time', 'Direction', 'Confirmation', 'PO/BOL', 'Origin', 'Model', 'Qty', 'Carrier', 'SCAC', 'Trailer type', 'Trailer #', 'Status', 'Door', 'Checked in', 'At door', 'Done', 'Booked by', 'Contact', 'Phone', 'Email']];
     C.appointments.filter((a) => a.local_date.slice(0, 7) === ym).sort((x, y) => (x.local_date + x.local_time).localeCompare(y.local_date + y.local_time)).forEach((a) => rows.push([
-      a.local_date, fmtT(a.local_time), DIRNAME[a.direction], a.conf_no, a.ref_no, a.carrier_name, a.scac, a.trailer_type, a.trailer_no, STATUS[a.status], a.door,
+      a.local_date, fmtT(a.local_time), DIRNAME[a.direction], a.conf_no, a.ref_no,
+      (a.ship || []).map((s) => s.origin).join('; '), (a.ship || []).map((s) => s.model).join('; '), (a.ship || []).map((s) => s.qty).join('; '), a.carrier_name, a.scac, a.trailer_type, a.trailer_no, STATUS[a.status], a.door,
       fmtStamp(a.arrived_at), fmtStamp(a.at_door_at), fmtStamp(a.done_at), a.booked_by === 'carrier' ? 'Carrier online' : a.booked_by, a.contact_name, a.phone, a.email]));
     const url = URL.createObjectURL(new Blob(['﻿' + rows.map((r) => r.map(q).join(',')).join('\r\n')], { type: 'text/csv' }));
     const l = document.createElement('a'); l.href = url; l.download = 'LWH-ArcBest-dock-appointments-' + ym + '.csv'; document.body.appendChild(l); l.click(); l.remove();
@@ -1069,7 +1179,7 @@
     if (q.get('c') && q.get('k')) return openManage(q.get('c'), q.get('k'));
     if (q.get('c')) { const m = LS.get('mine', []).find((x) => x.c === q.get('c').toUpperCase()); if (m) return openManage(m.c, m.k); }
     const v = q.get('view');
-    if (teamMode()) return go(['board', 'calendar', 'search', 'blocks', 'settings'].includes(v) ? v : 'board');
+    if (teamMode()) return go(['board', 'calendar', 'shipments', 'search', 'blocks', 'settings'].includes(v) ? v : 'board');
     if (v === 'board' || v === 'team') return go('login');
     go(['book', 'mine', 'find'].includes(v) ? v : 'home');
   }
