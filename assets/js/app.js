@@ -80,8 +80,34 @@
     } catch (e) { throw new Error('No connection. Check your signal and try again.'); }
     const j = await r.json().catch(() => null);
     if (!r.ok) throw new Error((j && (j.message || j.hint)) || 'Server error ' + r.status);
+    usageEvent(fn, args || {}, j);
     return j;
   }
+
+  // ---------- usage tracking (v1.3.1) — what people do, for the LWH app usage dashboard ----------
+  function usageEvent(fn, a, j) {
+    if (typeof window.lwhTrack !== 'function' || (j && (j.ok === false || j.error))) return;
+    const p = a.p || {};
+    const name = {
+      appt_book: 'carrier_booked_' + String(p.direction || '').toLowerCase(),
+      appt_reschedule: 'carrier_rescheduled', appt_cancel: 'carrier_cancelled', appt_push_sub: 'notifications_on',
+      appt_admin_book: 'team_booked', appt_admin_block_add: 'time_blocked',
+      appt_admin_send_wms: 'wms_list_emailed', appt_admin_import_shipments: 'shipments_imported', appt_admin_save_settings: 'settings_saved',
+      appt_admin_update: p.status ? 'board_' + String(p.status).toLowerCase() : (p.start ? 'team_rescheduled' : 'board_saved'),
+    }[fn];
+    if (name) window.lwhTrack(name.replace(/_$/, ''));
+  }
+  const usageSeen = {};
+  function usageScreen(v) {   // each screen at most once per device per 30 minutes
+    if (typeof window.lwhTrack !== 'function' || !v || v === 'home') return;
+    const now = Date.now(); if (usageSeen[v] && now - usageSeen[v] < 1800000) return;
+    usageSeen[v] = now; window.lwhTrack('screen:' + v);
+  }
+  window.lwhUsageUser = () => {
+    if (S.team && S.team.token && S.team.name) return S.team.name;
+    const pr = LS.get('profile', null);
+    return pr && pr.carrier_name ? 'Carrier · ' + String(pr.carrier_name).trim() : null;
+  };
 
   // ---------- state ----------
   const S = {
@@ -138,6 +164,7 @@
     if (v === 'logout') return teamLogout();
     if (v === 'book' && !(opts && opts.keep)) S.book = null;
     S.view = v;
+    usageScreen(v);
     clearInterval(S.team.timer); S.team.timer = null;
     const u = new URL(location.href);
     ['c', 'k', 'view'].forEach((p) => u.searchParams.delete(p));
@@ -535,7 +562,7 @@
         const r = await rpc('appt_admin_login', { p_name: n.value.trim(), p_pin: $('[name=p]').value });
         if (!r.ok) { $('#lErr').innerHTML = '<div class="note bad" style="margin-bottom:12px">' + esc(r.message) + '</div>'; return; }
         Object.assign(S.team, { token: r.token, name: r.name, role: r.role });
-        LS.set('team_token', r.token); LS.set('team_name', r.name); LS.set('team_role', r.role); LS.set('team_last', r.name);
+        LS.set('team_token', r.token); LS.set('team_name', r.name); LS.set('team_role', r.role); LS.set('team_last', r.name); if (window.lwhTrack) window.lwhTrack('team_sign_in');
         go('board');
       } catch (er) { toast(er.message, true); } finally { busy(false); }
     };

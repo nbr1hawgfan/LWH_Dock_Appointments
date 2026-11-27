@@ -13,8 +13,8 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Dock Appts">
   <link rel="preload" href="assets/fonts/oswald-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="assets/css/theme.css?v=1.3.0">
-  <link rel="stylesheet" href="assets/css/app.css?v=1.3.0">
+  <link rel="stylesheet" href="assets/css/theme.css?v=1.3.1">
+  <link rel="stylesheet" href="assets/css/app.css?v=1.3.1">
 </head>
 <body>
   <div class="utility"><div class="wrap">
@@ -48,6 +48,38 @@
   <div class="toast-host" id="toasts"></div>
   <div id="modalHost"></div>
 
-  <script src="assets/js/app.js?v=1.3.0"></script>
+  <!-- Usage tracking (LWH app usage dashboard, hub.logisticswarehouse.net/usage). Counts opens and key actions;
+       the team member's name when signed in, the carrier name a carrier saved on this device, and the network (IP). -->
+  <script>
+  (function () {
+    var APP = 'Dock Appointments';
+    var URL_ = 'https://tjivcqxnkftujceumdtx.supabase.co/rest/v1/rpc/log_app_usage';
+    var KEY = 'sb_publishable_PYlWSW6-Gi-QZl91IXUq0Q_W5mO3sDT';
+    function get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+    function set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+    var dev = get('lwhUsageDev');
+    if (!dev) { dev = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2)); set('lwhUsageDev', dev); }
+    var standalone = !!((window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone);
+    function who() { try { return typeof window.lwhUsageUser === 'function' ? (window.lwhUsageUser() || null) : null; } catch (e) { return null; } }
+    function queue() { try { return JSON.parse(get('lwhUsageQ') || '[]'); } catch (e) { return []; } }
+    function send(row) {
+      return fetch(URL_, { method: 'POST', keepalive: true, headers: { apikey: KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(row) })
+        .then(function (r) { if (!r.ok) throw 0; });
+    }
+    function flush() {
+      var q = queue(); if (!q.length || !navigator.onLine) return;
+      set('lwhUsageQ', '[]');
+      q.forEach(function (row) { send(row).catch(function () { var r = queue(); r.push(row); set('lwhUsageQ', JSON.stringify(r.slice(-50))); }); });
+    }
+    function track(event) {
+      var row = { p_app: APP, p_event: event || 'open', p_device: dev, p_path: location.pathname, p_standalone: standalone, p_at: new Date().toISOString(), p_user: who() };
+      send(row).then(flush).catch(function () { var q = queue(); q.push(row); set('lwhUsageQ', JSON.stringify(q.slice(-50))); });
+    }
+    window.lwhTrack = track;   // app.js calls lwhTrack('booked_inbound') etc.
+    window.addEventListener('load', function () { track('open'); });
+    window.addEventListener('online', flush);
+  })();
+  </script>
+  <script src="assets/js/app.js?v=1.3.1"></script>
 </body>
 </html>
